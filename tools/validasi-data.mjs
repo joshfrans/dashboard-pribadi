@@ -18,7 +18,7 @@ if (data && data.format) {
   const b = s => typeof s === "string" && /^[A-Za-z0-9+/]+=*$/.test(s);
   if (!b(data.kdf?.salt) || Buffer.from(data.kdf.salt, "base64").length < 16) e.push("salt harus ≥ 16 byte");
   if (!b(data.iv) || Buffer.from(data.iv, "base64").length !== 12) e.push("iv harus 12 byte");
-  if (!b(data.ct) || Buffer.from(data.ct, "base64").length < 64) e.push("ciphertext kosong/rusak");
+  if (!b(data.ct) || Buffer.from(data.ct, "base64").length < 17) e.push("ciphertext kosong/rusak");
   const extra = Object.keys(data).filter(k => !["format", "kdf", "cipher", "iv", "ct"].includes(k));
   if (extra.length) e.push("field tambahan di luar enkripsi: " + extra.join(", "));
   if (e.length) { e.forEach(x => console.error("GALAT:", x)); process.exit(1); }
@@ -52,6 +52,14 @@ for (const [id, c] of Object.entries(data.coc || {})) {
 for (const [id, k] of Object.entries(data.kpi || {})) {
   if (!/^\d{4}-\d{2}$/.test(id)) errors.push(`kpi/${id}: id harus YYYY-MM`);
   if (!tgl.test(k.tenggat || "")) errors.push(`kpi/${id}: tenggat tidak valid`);
+}
+
+if (data.kalender) {
+  if (!Array.isArray(data.kalender.acara)) errors.push("kalender.acara harus daftar");
+  for (const a of data.kalender.acara || []) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(a.mulai || "")) errors.push(`kalender: waktu mulai tidak valid (${a.judul})`);
+    if (a.link && !/^https:\/\/(www\.)?google\.com\/calendar\//.test(a.link)) errors.push(`kalender: tautan bukan Google Calendar (${a.judul})`);
+  }
 }
 
 // Pemindaian kebocoran — berlaku untuk semua profil.
