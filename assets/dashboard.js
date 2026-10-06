@@ -115,6 +115,7 @@
     var ag = [], end = addD(TODAY, 14);
     crs.forEach(function (c) { (c.milestones || []).forEach(function (m) { if (m.tanggal && m.status !== "Selesai" && m.tanggal <= end && m.tanggal >= addD(TODAY, -7)) ag.push({ d: m.tanggal, t: m.nama, s: c.nama + (m.status ? " · " + m.status : "") }); }); });
     all.forEach(function (t) { if (t.status !== "done" && !t.routine && t.due <= end) ag.push({ d: t.due, t: t.title, s: (CAT[t.cat] || "Tugas") + (t.prio === "tinggi" ? " · prioritas tinggi" : "") }); });
+    ((D.kalender || {}).acara || []).forEach(function (a) { var d = a.mulai.slice(0, 10); if (a.jenis === "rapat" && d >= TODAY && d <= end) ag.push({ d: d, t: a.judul, s: "Google Calendar · " + (a.sepanjangHari ? "sepanjang hari" : a.mulai.slice(11, 16) + " WIB") }); });
     ag.sort(function (a, b) { return a.d.localeCompare(b.d); });
     var abox = $("#agenda"); clear(abox);
     if (!ag.length) abox.appendChild(el("div", "empty", "Tidak ada agenda 14 hari ke depan."));
@@ -163,7 +164,7 @@
   }
 
   // ---- navigasi view ----
-  var VIEWS = { ringkasan: "Ringkasan", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
+  var VIEWS = { ringkasan: "Ringkasan", kalender: "Kalender", eviden: "Unggah & arsip eviden", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
   function route() {
     var v = (location.hash || "#ringkasan").slice(1);
     if (!VIEWS[v]) v = "ringkasan";
@@ -438,7 +439,8 @@
       meta.appendChild(el("span", "mono", "Tenggat " + shortD(t.due) + (t.time ? " " + t.time : "")));
       main.appendChild(meta);
       var side = el("div", "seg-ro"), bar = el("span", "bar"), f = el("b"); f.style.width = prog(t) + "%"; bar.appendChild(f);
-      side.appendChild(bar); side.appendChild(document.createTextNode(t.status === "done" ? "Selesai" : prog(t) + "%"));
+      side.appendChild(bar); side.appendChild(document.createTextNode(t.status === "done" ? (t.viaEviden ? "Selesai · eviden" : "Selesai") : prog(t) + "%"));
+      if (t.status !== "done" && t.due >= TODAY && !onCalendar(t)) { var gl = el("a", "gcal", "+ Kalender"); gl.href = gcalLink(t); gl.target = "_blank"; gl.rel = "noopener noreferrer"; gl.setAttribute("aria-label", "Tambah ke Google Calendar: " + t.title); main.appendChild(gl); }
       row.appendChild(dot); row.appendChild(main); row.appendChild(side); box.appendChild(row);
     });
   }
@@ -454,10 +456,10 @@
     if (jam <= 26) { setFresh("ok", "✓ Segar · data per " + label); banner.hidden = true; }
     else if (jam <= 96) { setFresh("warn", "▲ Tertunda · data per " + label); banner.hidden = false; banner.className = "banner"; banner.textContent = "Data belum diperbarui lebih dari sehari. Minta Claude memperbarui data/tracker.enc.json."; }
     else { setFresh("bad", "! Usang " + Math.floor(jam / 24) + " hari · data per " + label); banner.hidden = false; banner.className = "banner bad"; banner.textContent = "Data sudah lebih dari 4 hari. Angka di dashboard ini mungkin tidak lagi sesuai tracker."; }
-    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Tampilan baca; status tugas dan eviden dikelola di tracker privat.";
+    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden diunggah lewat menu Eviden; status lain dikelola di tracker privat.";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
-  function renderAll() { renderOverview(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); }
+  function renderAll() { renderOverview(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); }
 
   // ---- data terenkripsi: kata sandi → PBKDF2 → AES-256-GCM (WebCrypto) ----
   var SKEY = "dse-pribadi:sandi";
@@ -482,15 +484,16 @@
     }).then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
   }
   function lock(msg) {
-    sandi = null; keyCache = {}; D = { meta: {}, tasks: {}, cr: {}, coc: {}, kpi: {} }; loaded = false;
+    sandi = null; keyCache = {}; D = { meta: {}, tasks: {}, cr: {}, coc: {}, kpi: {} }; loaded = false; BASE = null; TOKEN = null; ghInfo = null; EV = { skema: 1, eviden: [] };
     document.body.classList.add("locked"); $("#lock").hidden = false;
     var er = $("#lockErr"); er.hidden = !msg; er.textContent = msg || "";
     setTimeout(function () { $("#lockPw").focus(); }, 0);
   }
   function unlocked(x) {
     if (!valid(x)) throw new Error("format");
-    D = x; loaded = true; document.body.classList.remove("locked"); $("#lock").hidden = true;
-    renderAll(); freshness();
+    BASE = x; loaded = true; document.body.classList.remove("locked"); $("#lock").hidden = true;
+    rebuild();
+    tokenLoad().then(function () { renderEvidenView(); return evLoad(); });
   }
   $("#lockForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -503,6 +506,291 @@
     }).catch(function () { lock("Kata sandi salah atau data rusak. Coba lagi."); }).then(function () { btn.disabled = false; btn.textContent = "Buka dashboard"; });
   });
   $("#btnLock").addEventListener("click", function () { rememberSet(null); lock("Dashboard dikunci. Kata sandi dihapus dari perangkat ini."); });
+
+  // =====================================================================
+  // EVIDEN (unggah terenkripsi ke repo lewat GitHub API) + GOOGLE CALENDAR
+  // =====================================================================
+  var EVIDEN_PATH = "data/eviden.enc.json";
+  var GH_KEY = "dse-pribadi:gh";           // token GitHub, disimpan TERENKRIPSI dengan kata sandi dashboard
+  var MAX_MB = 20;
+  var JENIS = [
+    { k: "mom", label: "MoM CoC", tugas: "mom-", per: "hari" },
+    { k: "rekap", label: "Rekap CoC", tugas: "rekap-", per: "hari" },
+    { k: "cresppd", label: "MoM Weekly CR ESPPD Re-Engineering", tugas: "cresppd-", per: "hari" },
+    { k: "crlayanan", label: "MoM Weekly CR Aplikasi Layanan GA", tugas: "crlayanan-", per: "hari" },
+    { k: "kpi4b", label: "Eviden KPI 4b", tugas: "kpi4b-", per: "bulan" },
+    { k: "cr", label: "Dokumen CR (timeline, UAT, BA)", tugas: null },
+    { k: "lain", label: "Lainnya", tugas: null }
+  ];
+  var BASE = null, EV = { skema: 1, eviden: [] }, evTag = null, TOKEN = null, ghInfo = null;
+  var REPO = (function () { var o = location.hostname.split(".")[0], r = location.pathname.split("/").filter(Boolean)[0] || ""; return { owner: o, repo: r }; })();
+  var te = new TextEncoder();
+
+  function jenisOf(k) { return JENIS.filter(function (j) { return j.k === k; })[0] || JENIS[JENIS.length - 1]; }
+  function taskIdFor(jenis, tanggal) { var j = jenisOf(jenis); if (!j.tugas || !tanggal) return null; return j.tugas + (j.per === "bulan" ? tanggal.slice(0, 7) : tanggal); }
+  function b64(u8) { var s = "", CH = 0x8000; for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s); }
+  function kbStr(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  function nowIso() { return new Date().toISOString().replace(/\.\d+Z$/, "Z"); }
+
+  // --- kunci dari kata sandi (salt baru per berkas) ---
+  function keyFrom(pw, salt, iter, usages) {
+    return crypto.subtle.importKey("raw", te.encode(pw.normalize("NFC")), "PBKDF2", false, ["deriveKey"]).then(function (base) {
+      return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: salt, iterations: iter }, base, { name: "AES-GCM", length: 256 }, false, usages);
+    });
+  }
+  function encryptJSON(pw, obj) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), format = "dse-aesgcm-v1";
+    return keyFrom(pw, salt, 600000, ["encrypt"]).then(function (k) {
+      return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv, additionalData: te.encode(format) }, k, te.encode(JSON.stringify(obj)));
+    }).then(function (ct) { return { format: format, kdf: { name: "PBKDF2", hash: "SHA-256", iter: 600000, salt: b64(salt) }, cipher: "AES-256-GCM", iv: b64(iv), ct: b64(new Uint8Array(ct)) }; });
+  }
+  // berkas biner: "DSE1" + salt(16) + iv(12) + ciphertext, AAD "dse-file-v1"
+  function encryptFile(pw, bytes) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    return keyFrom(pw, salt, 600000, ["encrypt"]).then(function (k) {
+      return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv, additionalData: te.encode("dse-file-v1") }, k, bytes);
+    }).then(function (ct) { var c = new Uint8Array(ct), out = new Uint8Array(32 + c.length); out.set(te.encode("DSE1"), 0); out.set(salt, 4); out.set(iv, 20); out.set(c, 32); return out; });
+  }
+  function decryptFile(pw, buf) {
+    var u = new Uint8Array(buf);
+    if (new TextDecoder().decode(u.subarray(0, 4)) !== "DSE1") return Promise.reject(new Error("format"));
+    return keyFrom(pw, u.slice(4, 20), 600000, ["decrypt"]).then(function (k) {
+      return crypto.subtle.decrypt({ name: "AES-GCM", iv: u.slice(20, 32), additionalData: te.encode("dse-file-v1") }, k, u.subarray(32));
+    });
+  }
+
+  // --- GitHub API (hanya repo dashboard ini) ---
+  function gh(method, path, body, accept) {
+    var h = { Authorization: "Bearer " + TOKEN, Accept: accept || "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+    if (body) h["Content-Type"] = "application/json";
+    return fetch("https://api.github.com/repos/" + REPO.owner + "/" + REPO.repo + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  }
+  function ghGet(path) { return gh("GET", "/contents/" + path + "?ref=main").then(function (r) { if (r.status === 404) return null; if (!r.ok) throw ghErr(r); return r.json(); }); }
+  function ghPut(path, b64content, message, sha) {
+    var body = { message: message, content: b64content, branch: "main" }; if (sha) body.sha = sha;
+    return gh("PUT", "/contents/" + path, body).then(function (r) { if (!r.ok) throw ghErr(r); return r.json(); });
+  }
+  function ghErr(r) { var e = new Error("GitHub " + r.status); e.status = r.status; return e; }
+  function ghMsg(e) {
+    if (!e || !e.status) return "Koneksi ke GitHub gagal. Periksa internet lalu coba lagi.";
+    if (e.status === 401) return "Token GitHub tidak berlaku (kedaluwarsa atau dicabut). Buat token baru di Koneksi GitHub.";
+    if (e.status === 403 || e.status === 404) return "Token tidak punya izin tulis ke repo " + REPO.repo + ". Pastikan izin Contents: Read and write.";
+    if (e.status === 409 || e.status === 422) return "File di repo baru saja berubah. Coba unggah lagi.";
+    return "GitHub menolak permintaan (kode " + e.status + ").";
+  }
+
+  // --- token: disimpan terenkripsi, dibuka dengan kata sandi ---
+  function tokenLoad() {
+    var raw = null; try { raw = localStorage.getItem(GH_KEY); } catch (e) { }
+    if (!raw || !sandi) { TOKEN = null; return Promise.resolve(null); }
+    var e; try { e = JSON.parse(raw); } catch (x) { return Promise.resolve(null); }
+    return decrypt(sandi, e).then(function (o) { TOKEN = o.token; return TOKEN; }).catch(function () { TOKEN = null; return null; });
+  }
+  function tokenSave(tok) { return encryptJSON(sandi, { token: tok, disimpan: nowIso() }).then(function (e) { try { localStorage.setItem(GH_KEY, JSON.stringify(e)); } catch (x) { } TOKEN = tok; }); }
+  function tokenForget() { try { localStorage.removeItem(GH_KEY); } catch (x) { } TOKEN = null; ghInfo = null; }
+  function tokenTest(tok) {
+    var prev = TOKEN; TOKEN = tok;
+    return gh("GET", "").then(function (r) { if (!r.ok) throw ghErr(r); return r.json(); }).then(function (j) {
+      if (!j.permissions || !j.permissions.push) { var e = new Error("no push"); e.status = 403; throw e; }
+      ghInfo = { full: j.full_name, private: j.private }; return ghInfo;
+    }).catch(function (e) { TOKEN = prev; throw e; });
+  }
+
+  // --- indeks eviden: data/eviden.enc.json (terenkripsi) ---
+  function evFromEnvelope(e) { return decrypt(sandi, e).then(function (o) { if (!o || !Array.isArray(o.eviden)) throw new Error("format"); return o; }); }
+  function evLoad() {
+    // sumber cepat: GitHub Pages (situs sendiri); jika token ada, API (lebih segar setelah unggah)
+    var p = TOKEN ? ghGet(EVIDEN_PATH).then(function (j) { return j ? JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, "")))) : null; })
+                  : fetch(EVIDEN_PATH, { cache: "no-cache" }).then(function (r) { evTag = r.headers.get("ETag") || r.headers.get("Last-Modified"); return r.ok ? r.json() : null; });
+    return p.then(function (e) { return e ? evFromEnvelope(e) : { skema: 1, eviden: [] }; })
+      .then(function (o) { EV = o; rebuild(); }).catch(function () { /* indeks belum ada atau tidak terbaca: abaikan */ });
+  }
+  function rebuild() {
+    if (!BASE) return;
+    var d = JSON.parse(JSON.stringify(BASE));
+    d.evidenList = (EV.eviden || []).slice().sort(function (a, b) { return (b.tanggal + b.diunggah).localeCompare(a.tanggal + a.diunggah); });
+    d.evidenList.forEach(function (x) {
+      var t = x.tugas && d.tasks[x.tugas];
+      if (t && t.status !== "done") { t.status = "done"; t.progress = 100; t.doneAt = x.diunggah; t.viaEviden = true; }
+      if (x.jenis === "kpi4b") { var k = d.kpi[x.tanggal.slice(0, 7)]; if (k) k.adaLaporan = true; }
+    });
+    D = d; renderAll(); if (loaded) freshness();
+  }
+
+  // --- unggah ---
+  var uploading = false;
+  function setUpMsg(cls, txt) { var m = $("#upMsg"); m.hidden = !txt; m.className = "up-msg " + (cls || ""); m.textContent = txt || ""; }
+  function doUpload(ev) {
+    ev.preventDefault();
+    if (uploading) return;
+    if (!TOKEN) { setUpMsg("bad", "Hubungkan GitHub dulu (bagian Koneksi GitHub di bawah)."); return; }
+    var f = $("#upFile").files[0], jenis = $("#upJenis").value, tanggal = $("#upTanggal").value, ket = $("#upKet").value.trim();
+    if (!f) { setUpMsg("bad", "Pilih file eviden."); return; }
+    if (!tanggal) { setUpMsg("bad", "Isi tanggal eviden."); return; }
+    if (f.size > MAX_MB * 1048576) { setUpMsg("bad", "File " + kbStr(f.size) + " melebihi batas " + MAX_MB + " MB. Kompres PDF-nya dulu."); return; }
+    var id = tanggal.replace(/-/g, "") + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
+    var path = "eviden/" + tanggal.slice(0, 4) + "/" + tanggal.slice(5, 7) + "/" + id + ".bin";
+    var tugas = taskIdFor(jenis, tanggal);
+    if (tugas && !(BASE.tasks || {})[tugas]) tugas = null;
+    uploading = true; $("#upBtn").disabled = true; setUpMsg("", "Mengenkripsi file…");
+    f.arrayBuffer().then(function (buf) { return encryptFile(sandi, buf); }).then(function (bin) {
+      setUpMsg("", "Mengunggah ke GitHub (" + kbStr(bin.length) + ")…");
+      return ghPut(path, b64(bin), "Tambah eviden terenkripsi " + id);
+    }).then(function () {
+      setUpMsg("", "Memperbarui daftar eviden…");
+      var entry = { id: id, path: path, jenis: jenis, tanggal: tanggal, ket: ket, nama: f.name, ukuran: f.size, tipe: f.type || "", diunggah: nowIso(), tugas: tugas };
+      return saveIndex(function (o) { o.eviden.push(entry); return o; }, 0);
+    }).then(function () {
+      $("#upForm").reset(); $("#upTanggal").value = TODAY; syncUpHint();
+      setUpMsg("ok", "✓ Eviden tersimpan terenkripsi" + (tugas ? " dan tugas terkait ditandai selesai." : ".") + " Situs memuat versi baru dalam 1–2 menit; daftar di bawah sudah diperbarui.");
+    }).catch(function (e) { setUpMsg("bad", "! " + ghMsg(e)); }).then(function () { uploading = false; $("#upBtn").disabled = false; });
+  }
+  function saveIndex(mutate, attempt) {
+    return ghGet(EVIDEN_PATH).then(function (j) {
+      var p = j ? evFromEnvelope(JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, ""))))) : Promise.resolve({ skema: 1, eviden: [] });
+      return p.then(function (o) { var next = mutate(o); next.diperbarui = nowIso(); return encryptJSON(sandi, next).then(function (e) {
+        return ghPut(EVIDEN_PATH, b64(te.encode(JSON.stringify(e) + "\n")), "Perbarui indeks eviden terenkripsi", j && j.sha).then(function () { EV = next; rebuild(); });
+      }); });
+    }).catch(function (e) { if ((e.status === 409 || e.status === 422) && attempt < 2) return saveIndex(mutate, attempt + 1); throw e; });
+  }
+  function openEviden(x, download) {
+    var btnMsg = $("#evListMsg"); btnMsg.hidden = false; btnMsg.className = "up-msg"; btnMsg.textContent = "Membuka " + x.nama + "…";
+    var src = TOKEN ? gh("GET", "/contents/" + x.path + "?ref=main", null, "application/vnd.github.raw") : fetch(x.path, { cache: "no-cache" });
+    src.then(function (r) { if (!r.ok) throw ghErr(r); return r.arrayBuffer(); }).then(function (buf) { return decryptFile(sandi, buf); }).then(function (plain) {
+      var url = URL.createObjectURL(new Blob([plain], { type: x.tipe || "application/octet-stream" }));
+      var a = document.createElement("a"); a.href = url; if (download || !/pdf|image/.test(x.tipe || "")) a.download = x.nama; else a.target = "_blank";
+      a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      btnMsg.hidden = true;
+    }).catch(function (e) { btnMsg.className = "up-msg bad"; btnMsg.textContent = e && e.status === 404 ? "! File belum tersedia di situs. Tunggu 1–2 menit setelah unggah, atau hubungkan GitHub." : "! File tidak bisa dibuka: " + ghMsg(e); });
+  }
+
+  // --- perbarui data dashboard (tracker.enc.json) dari file yang dikirim Claude ---
+  function doUpdateData() {
+    var f = $("#dataFile").files[0], m = $("#dataMsg");
+    m.hidden = false; m.className = "up-msg";
+    if (!f) { m.className = "up-msg bad"; m.textContent = "Pilih file tracker.enc.json dari Claude."; return; }
+    if (!TOKEN) { m.className = "up-msg bad"; m.textContent = "Hubungkan GitHub dulu."; return; }
+    m.textContent = "Memeriksa file…";
+    f.text().then(function (txt) { var e = JSON.parse(txt); return decrypt(sandi, e).then(function (x) { if (!valid(x)) throw new Error("format"); return { e: e, x: x, txt: txt }; }); })
+      .then(function (o) { m.textContent = "Mengunggah ke GitHub…"; return ghGet(DATA_URL).then(function (j) { return ghPut(DATA_URL, b64(te.encode(o.txt.endsWith("\n") ? o.txt : o.txt + "\n")), "Perbarui data dashboard terenkripsi", j && j.sha); }).then(function () { return o; }); })
+      .then(function (o) { env = o.e; BASE = o.x; rebuild(); m.className = "up-msg ok"; m.textContent = "✓ Data dashboard diperbarui (diekspor " + (o.x.meta.diekspor || "?") + ")."; $("#dataFile").value = ""; })
+      .catch(function (e) { m.className = "up-msg bad"; m.textContent = e && e.status ? "! " + ghMsg(e) : "! File bukan data dashboard ini, atau kata sandinya berbeda."; });
+  }
+
+  // --- tampilan koneksi GitHub ---
+  function renderGh() {
+    var st = $("#ghState"); clear(st);
+    var on = !!TOKEN;
+    st.appendChild(el("span", "fchip " + (on ? "ok" : "warn"), on ? "✓ Terhubung" + (ghInfo ? " ke " + ghInfo.full : "") : "▲ Belum terhubung"));
+    $("#ghForm").hidden = on; $("#ghOff").hidden = !on; $("#dataBox").hidden = !on;
+    $("#upLocked").hidden = on; $("#upBtn").disabled = !on || uploading;
+  }
+  function syncUpHint() {
+    var jenis = $("#upJenis").value, tanggal = $("#upTanggal").value, id = taskIdFor(jenis, tanggal), t = id && BASE && BASE.tasks[id];
+    var h = $("#upHint");
+    h.textContent = t ? "Tugas terkait: “" + t.title + "” (" + (t.status === "done" ? "sudah selesai" : "akan ditandai selesai") + ")." : (jenisOf(jenis).tugas ? "Belum ada tugas " + jenisOf(jenis).label + " untuk tanggal ini; eviden tetap tersimpan." : "Eviden disimpan tanpa tugas terkait.");
+    $("#upKetL").textContent = jenis === "mom" || jenis === "rekap" ? "Bidang" : jenis === "cr" ? "Nama CR / dokumen" : "Keterangan";
+  }
+
+  function renderEvidenView() {
+    var box = $("#evList"); if (!box) return; clear(box);
+    renderGh();
+    var list = D.evidenList || [];
+    $("#evCount").textContent = list.length + " eviden";
+    if (!list.length) { var tr0 = el("tr"), td0 = el("td", "empty", loaded ? "Belum ada eviden yang diunggah dari dashboard." : "Memuat…"); td0.colSpan = 6; tr0.appendChild(td0); box.appendChild(tr0); return; }
+    list.forEach(function (x) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "m", shortD(x.tanggal)));
+      var j = el("td"); j.appendChild(el("span", "pill " + (x.jenis === "kpi4b" ? "kpi" : x.jenis === "cresppd" || x.jenis === "crlayanan" || x.jenis === "cr" ? "cr" : x.jenis === "mom" ? "mom" : x.jenis === "rekap" ? "rekap" : "lain"), jenisOf(x.jenis).label)); tr.appendChild(j);
+      tr.appendChild(el("td", null, x.ket || "–"));
+      var fn = el("td"); fn.appendChild(el("div", "fname", x.nama)); fn.appendChild(el("span", "sub", kbStr(x.ukuran || 0) + " · diunggah " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(x.diunggah)))); tr.appendChild(fn);
+      var tk = el("td"), t = x.tugas && D.tasks[x.tugas];
+      tk.appendChild(t ? el("span", "chip s-done", "Tugas selesai") : el("span", "sub", "–")); tr.appendChild(tk);
+      var ac = el("td", "act"), b1 = el("button", "btn", "Buka"), b2 = el("button", "btn", "Unduh");
+      b1.type = b2.type = "button"; b1.addEventListener("click", function () { openEviden(x, false); }); b2.addEventListener("click", function () { openEviden(x, true); });
+      ac.appendChild(b1); ac.appendChild(b2); tr.appendChild(ac);
+      box.appendChild(tr);
+    });
+  }
+
+  // --- Google Calendar ---
+  var KJ = { rapat: "Rapat", tenggat: "Tenggat", milestone: "Milestone CR", rutin: "Rutin", kpi: "KPI", lain: "Acara" };
+  function kalList() { return ((D.kalender || {}).acara || []).slice().sort(function (a, b) { return a.mulai.localeCompare(b.mulai); }); }
+  function evDate(a) { return a.mulai.slice(0, 10); }
+  function evTime(a) { return a.sepanjangHari ? "Sepanjang hari" : a.mulai.slice(11, 16) + (a.selesai ? "–" + a.selesai.slice(11, 16) : ""); }
+  function relatedTask(a) {
+    var d = evDate(a), s = (a.judul || "").toLowerCase(), id = null;
+    if (/evaluasi mom/.test(s)) id = "mom-" + d;
+    else if (/esppd/.test(s) && (a.jenis === "rapat" || a.jenis === "tenggat")) id = "cresppd-" + d;
+    else if (/layanan ga/.test(s) && (a.jenis === "rapat" || a.jenis === "tenggat")) id = "crlayanan-" + d;
+    else if (/kpi 4b/.test(s)) id = "kpi4b-" + d.slice(0, 7);
+    return id && D.tasks[id] ? Object.assign({ id: id }, D.tasks[id]) : null;
+  }
+  function gcalLink(t) {
+    var d = t.due.replace(/-/g, ""), hm = (t.time || "").replace(":", "");
+    var dates = hm ? d + "T" + String(Math.max(0, +hm.slice(0, 2) - 1)).padStart(2, "0") + hm.slice(2) + "00/" + d + "T" + hm + "00" : d + "/" + addD(t.due, 1).replace(/-/g, "");
+    var q = new URLSearchParams({ action: "TEMPLATE", text: t.title, dates: dates, ctz: "Asia/Jakarta", details: "Dari Dashboard Pribadi: " + location.origin + location.pathname + "#tugas" });
+    return "https://calendar.google.com/calendar/render?" + q.toString();
+  }
+  function onCalendar(t) {
+    if (t.routine) return true;
+    var s = t.title.toLowerCase();
+    return kalList().some(function (a) { return evDate(a) === t.due && (a.judul || "").toLowerCase().split(/\W+/).filter(function (w) { return w.length > 4; }).some(function (w) { return s.indexOf(w) >= 0; }); });
+  }
+  function renderKalender() {
+    var box = $("#kalList"); if (!box) return; clear(box);
+    var K = D.kalender || null, src = $("#kalSrc");
+    if (!K) { src.textContent = "Data kalender belum ada di data dashboard. Minta Claude “perbarui dashboard pribadi” untuk menarik agenda Google Calendar."; }
+    else src.textContent = "Dari Google Calendar " + (K.kalender || "utama") + " · diambil " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(K.diambil)) + " WIB · " + (K.acara || []).length + " acara";
+    var from = addD(TODAY, -1), to = addD(TODAY, 14), byDay = {};
+    kalList().forEach(function (a) { var d = evDate(a); if (d >= from && d <= to) (byDay[d] = byDay[d] || []).push(a); });
+    var days = Object.keys(byDay).sort();
+    if (!days.length && K) box.appendChild(el("div", "empty", "Tidak ada acara 14 hari ke depan."));
+    days.forEach(function (d) {
+      var g = el("div", "kday" + (d === TODAY ? " is-today" : "")), h = el("div", "kday-h");
+      h.appendChild(el("b", null, fmt(d, { weekday: "long", day: "numeric", month: "long" }))); if (d === TODAY) h.appendChild(el("span", "fchip ok", "Hari ini"));
+      g.appendChild(h);
+      byDay[d].forEach(function (a) {
+        var r = el("div", "kev k-" + (a.jenis || "lain"));
+        r.appendChild(el("span", "kt", evTime(a)));
+        var mid = el("div", "km"); mid.appendChild(el("b", null, a.judul)); mid.appendChild(el("span", "sub", KJ[a.jenis] || "Acara")); r.appendChild(mid);
+        var side = el("div", "ks"), t = relatedTask(a);
+        if (t) side.appendChild(el("span", "chip " + (t.status === "done" ? "s-done" : t.due < TODAY ? "s-late" : "s-hold"), t.status === "done" ? (t.viaEviden ? "Eviden masuk" : "Selesai") : t.due < TODAY ? "Belum selesai" : "Belum"));
+        if (a.link) { var l = el("a", "btn", "Buka"); l.href = a.link; l.target = "_blank"; l.rel = "noopener noreferrer"; l.setAttribute("aria-label", "Buka di Google Calendar: " + a.judul); side.appendChild(l); }
+        r.appendChild(side); g.appendChild(r);
+      });
+      box.appendChild(g);
+    });
+    // tugas yang belum ada di kalender
+    var miss = $("#kalMiss"); clear(miss);
+    var todo = allTasks().filter(function (t) { return t.status !== "done" && t.due >= TODAY && t.due <= addD(TODAY, 30) && !onCalendar(t); }).sort(function (a, b) { return a.due.localeCompare(b.due); });
+    $("#kalMissN").textContent = todo.length ? todo.length + " tugas" : "";
+    if (!todo.length) miss.appendChild(el("div", "empty", "Semua tugas 30 hari ke depan sudah ada di kalender atau selesai."));
+    todo.forEach(function (t) {
+      var r = el("div", "kev"); r.appendChild(el("span", "kt", shortD(t.due) + (t.time ? " " + t.time : "")));
+      var mid = el("div", "km"); mid.appendChild(el("b", null, t.title)); mid.appendChild(el("span", "sub", (CAT[t.cat] || "Tugas") + (t.prio === "tinggi" ? " · prioritas tinggi" : ""))); r.appendChild(mid);
+      var side = el("div", "ks"), l = el("a", "btn", "+ Google Calendar"); l.href = gcalLink(t); l.target = "_blank"; l.rel = "noopener noreferrer"; l.setAttribute("aria-label", "Tambah ke Google Calendar: " + t.title);
+      side.appendChild(l); r.appendChild(side); miss.appendChild(r);
+    });
+  }
+
+  // --- event handler ---
+  $("#upForm").addEventListener("submit", doUpload);
+  $("#upJenis").addEventListener("change", syncUpHint); $("#upTanggal").addEventListener("change", syncUpHint);
+  $("#upTanggal").value = TODAY;
+  (function () { var s = $("#upJenis"); JENIS.forEach(function (j) { var o = el("option", null, j.label); o.value = j.k; s.appendChild(o); }); })();
+  $("#upFile").addEventListener("change", function () { var f = $("#upFile").files[0]; if (f && f.size > MAX_MB * 1048576) setUpMsg("bad", "File " + kbStr(f.size) + " melebihi batas " + MAX_MB + " MB."); else setUpMsg("", ""); });
+  $("#ghForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var tok = $("#ghTok").value.trim(), m = $("#ghMsg"); m.hidden = false; m.className = "up-msg";
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(tok)) { m.className = "up-msg bad"; m.textContent = "Format token tidak dikenali. Token GitHub diawali github_pat_."; return; }
+    m.textContent = "Menguji token…";
+    tokenTest(tok).then(function () { return tokenSave(tok); }).then(function () { $("#ghTok").value = ""; m.className = "up-msg ok"; m.textContent = "✓ Terhubung. Token disimpan terenkripsi dengan kata sandi dashboard di perangkat ini."; renderEvidenView(); evLoad(); })
+      .catch(function (e) { m.className = "up-msg bad"; m.textContent = "! " + ghMsg(e); });
+  });
+  $("#ghForget").addEventListener("click", function () { tokenForget(); var m = $("#ghMsg"); m.hidden = false; m.className = "up-msg"; m.textContent = "Token dihapus dari perangkat ini. Cabut juga di GitHub jika tidak dipakai lagi."; renderEvidenView(); });
+  $("#dataBtn").addEventListener("click", doUpdateData);
+  $("#evRefresh").addEventListener("click", function () { evLoad(); });
 
   function load() {
     return fetch(DATA_URL, { cache: "no-cache" }).then(function (r) {
@@ -527,6 +815,7 @@
       var tag = r.headers.get("ETag") || r.headers.get("Last-Modified");
       if (tag && tag !== lastTag) load(); else if (loaded) freshness();
     }).catch(function () { /* coba lagi pada putaran berikutnya */ });
+    if (loaded && !TOKEN) fetch(EVIDEN_PATH, { method: "HEAD", cache: "no-cache" }).then(function (r) { var tag = r.headers.get("ETag") || r.headers.get("Last-Modified"); if (r.ok && tag && tag !== evTag) evLoad(); }).catch(function () { });
   }
 
   // ---- interaksi ----
