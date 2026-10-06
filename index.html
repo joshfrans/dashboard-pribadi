@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Dashboard Pribadi · Strategi &amp; Evaluasi</title>
+<link rel="stylesheet" href="assets/dashboard.css?v=20261006-3">
+<script src="assets/dashboard.js?v=20261006-3" defer></script>
+</head>
+<body>
+<a class="skip" href="#konten">Langsung ke isi</a>
+<div class="shell">
+  <aside class="side" aria-label="Navigasi dashboard">
+    <div class="brand"><i></i><b>Dashboard Pribadi</b><span>Officer Strategi &amp; Evaluasi · DIV GA</span></div>
+    <nav class="nav">
+      <a href="#ringkasan" data-nav="ringkasan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Ringkasan</a>
+      <a href="#rutin" data-nav="rutin"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Rutin mingguan</a>
+      <a href="#cr" data-nav="cr"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Monitoring CR<span class="cnt" id="navCr" hidden></span></a>
+      <a href="#coc" data-nav="coc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Eviden CoC</a>
+      <a href="#kpi" data-nav="kpi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>KPI 4b</a>
+      <a href="#tugas" data-nav="tugas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Daftar tugas<span class="cnt" id="navLate" hidden></span></a>
+    </nav>
+    <div class="side-foot">
+      <span id="sideData">Memuat data…</span>
+      <span>Tampilan baca. Pembaruan status & eviden di tracker privat claude.ai.</span>
+      <button class="btn" type="button" id="btnLock">Kunci dashboard</button>
+    </div>
+  </aside>
+
+  <main class="content" id="konten">
+    <div class="topbar">
+      <div><div class="crumb">Dashboard pribadi · Strategi &amp; Evaluasi</div><h1 id="viewTitle">Ringkasan</h1></div>
+      <div class="fbar" aria-label="Status data">
+        <span class="fchip"><span class="k">Hari ini</span><span id="todayLbl">—</span></span>
+        <span class="fchip" id="fresh">Memuat data…</span>
+      </div>
+    </div>
+    <p class="banner" id="banner" hidden></p>
+
+    <!-- RINGKASAN -->
+    <section class="view" id="v-ringkasan" aria-labelledby="viewTitle">
+      <div class="card hero">
+        <div><div class="lbl">CR terlambat</div><div class="big" id="heroNum">–</div></div>
+        <p id="heroText">Memuat…</p>
+      </div>
+      <div class="kpis">
+        <div class="card kpi-t"><div class="l">Progres tugas minggu ini</div><div class="v" id="kWeek">–</div><div class="meter" aria-hidden="true"><b id="kWeekBar"></b></div><div class="d" id="kWeekSub">—</div></div>
+        <div class="card kpi-t"><div class="l">Tugas lewat tenggat</div><div class="v" id="kLate">–</div><div class="d" id="kLateSub">—</div></div>
+        <div class="card kpi-t"><div class="l">Indeks kemajuan CoC minggu ini</div><div class="v" id="kCoc">–</div><div class="d" id="kCocSub">—</div></div>
+        <div class="card kpi-t"><div class="l" id="kKpiL">KPI 4b bulan ini</div><div class="v" id="kKpi">–</div><div class="d" id="kKpiSub">—</div></div>
+      </div>
+      <div class="grid-2-1">
+        <div class="card">
+          <div class="card-h"><h2>Progres CR aplikasi</h2><span class="sub">% progres, urut menurut status jadwal</span><a href="#cr">Rincian CR →</a></div>
+          <div class="hbars" id="crChart" role="list"></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks" id="crAxis"></div><span></span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Agenda 14 hari</h2><span class="sub">milestone CR &amp; tenggat tugas</span></div>
+          <div class="agenda" id="agenda"></div>
+        </div>
+      </div>
+      <div class="grid-1-1">
+        <div class="card">
+          <div class="card-h"><h2>Status komitmen CoC per bidang</h2><a href="#coc">Rincian CoC →</a></div>
+          <div class="lgd" id="cocLegend"></div>
+          <div class="comp" id="cocChart"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>CR Reengineering di laporan KPI 4b</h2><span class="sub">item Done per laporan bulanan</span><a href="#kpi">Rincian KPI →</a></div>
+          <div class="cols" id="kpiChart"></div>
+          <p class="table-note" id="kpiNote"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUTIN -->
+    <section class="view" id="v-rutin" hidden>
+      <div class="card">
+        <div class="sec-head">
+          <h2>Matriks rutin</h2>
+          <div class="weeknav">
+            <button class="btn" type="button" id="prevW" aria-label="Minggu sebelumnya">‹</button>
+            <span class="lbl" id="weekLbl">—</span>
+            <button class="btn" type="button" id="nextW" aria-label="Minggu berikutnya">›</button>
+            <button class="btn" type="button" id="thisW">Minggu ini</button>
+          </div>
+        </div>
+        <div class="matrix-box">
+          <table class="matrix">
+            <thead><tr id="mHead"><th scope="col">Pekerjaan</th></tr></thead>
+            <tbody id="mBody"></tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <span class="lg-none">Belum dibuat</span><span class="lg-todo">Belum</span><span class="lg-doing">Proses</span><span class="lg-done">Selesai</span><span class="lg-late">Terlambat</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Progres 4 minggu terakhir</h2><span class="sub">rata-rata progres tugas bertenggat di minggu itu</span></div>
+        <div class="trend" id="trend"></div>
+      </div>
+    </section>
+
+    <!-- CR -->
+    <section class="view" id="v-cr" hidden>
+      <div class="card">
+        <div class="sec-head"><h2>Daftar CR</h2><div class="tabs" role="group" aria-label="Filter aplikasi" id="crTabs"></div></div>
+        <div class="cr-head" id="crHead"></div>
+        <div class="crlist" id="crList"><div class="empty">Memuat data CR…</div></div>
+      </div>
+    </section>
+
+    <!-- COC -->
+    <section class="view" id="v-coc" hidden>
+      <div class="card">
+        <div class="sec-head"><h2>CoC Senin–Kamis</h2>
+          <div class="weeknav"><button class="btn" type="button" id="prevW2" aria-label="Minggu sebelumnya">‹</button><span class="lbl" id="evWeek"></span><button class="btn" type="button" id="nextW2" aria-label="Minggu berikutnya">›</button></div>
+        </div>
+        <div class="ev-grid" id="evGrid"></div>
+      </div>
+      <div class="detail" id="evDetail" hidden></div>
+    </section>
+
+    <!-- KPI -->
+    <section class="view" id="v-kpi" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Eviden KPI 4b DIV GA</h2><span class="sub">Laporan progres pengembangan aplikasi Transformasi GA · tenggat hari kerja ke-3</span></div>
+        <div class="kbox2"><table class="kpi"><thead><tr><th scope="col">Laporan</th><th scope="col">Tanggal · tenggat</th><th scope="col">CR Managed Service</th><th scope="col">CR Reengineering</th><th scope="col">Catatan</th></tr></thead><tbody id="kpiBody"><tr><td colspan="5" class="empty">Memuat eviden KPI…</td></tr></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- TUGAS -->
+    <section class="view" id="v-tugas" hidden>
+      <div class="card">
+        <div class="sec-head">
+          <h2>Daftar tugas</h2>
+          <div class="tabs" role="group" aria-label="Filter tugas" id="taskTabs">
+            <button class="tab" type="button" data-f="today" aria-pressed="true">Hari ini<span class="n"></span></button>
+            <button class="tab" type="button" data-f="week" aria-pressed="false">Minggu ini<span class="n"></span></button>
+            <button class="tab" type="button" data-f="late" aria-pressed="false">Terlambat<span class="n"></span></button>
+            <button class="tab" type="button" data-f="open" aria-pressed="false">Semua aktif<span class="n"></span></button>
+            <button class="tab" type="button" data-f="done" aria-pressed="false">Selesai<span class="n"></span></button>
+          </div>
+        </div>
+        <div class="list" id="list"><div class="empty">Memuat tugas…</div></div>
+      </div>
+    </section>
+
+    <footer><p id="footSrc">Sumber data: data/tracker.enc.json (terenkripsi).</p></footer>
+  </main>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="lock" id="lock" hidden>
+  <form class="lock-card" id="lockForm" autocomplete="on">
+    <i class="lock-mark" aria-hidden="true"></i>
+    <h1>Dashboard Pribadi</h1>
+    <p>Data dashboard ini terenkripsi. Masukkan kata sandi untuk membukanya di perangkat ini.</p>
+    <input type="text" name="username" value="dashboard-pribadi" autocomplete="username" hidden>
+    <label for="lockPw">Kata sandi</label>
+    <input id="lockPw" type="password" autocomplete="current-password" required spellcheck="false">
+    <label class="keep"><input id="lockKeep" type="checkbox"> Ingat di perangkat ini</label>
+    <p class="lock-err" id="lockErr" role="alert" hidden></p>
+    <button class="btn primary" id="lockBtn" type="submit">Buka dashboard</button>
+    <small>Dekripsi berjalan di browser Anda; kata sandi tidak dikirim ke mana pun.</small>
+  </form>
+</div>
+</body>
+</html>

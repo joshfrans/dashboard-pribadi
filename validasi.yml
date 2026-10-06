@@ -1,0 +1,44 @@
+name: Validasi dashboard
+
+# Setiap push / Pull Request: pastikan data tetap terenkripsi, tidak ada file polos,
+# tidak ada aset eksternal, dan JavaScript valid.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validasi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validasi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Data hanya dalam bentuk terenkripsi
+        run: |
+          if ls data/*.json 2>/dev/null | grep -v 'tracker.enc.json$'; then
+            echo "Ada file JSON polos di data/ — hapus, hanya tracker.enc.json yang boleh"; exit 1; fi
+          node tools/validasi-data.mjs data/tracker.enc.json
+      - name: Tidak ada data sensitif di file publik
+        run: |
+          if grep -rInE '[A-Za-z0-9._%+-]+@pln\.co\.id|sharepoint\.com|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}' --include='*.html' --include='*.js' --include='*.css' --include='*.md' --include='*.mjs' --include='*.py' .; then
+            echo "Temuan data sensitif di file publik"; exit 1; fi
+      - name: Sintaks JavaScript
+        run: |
+          node --check assets/dashboard.js
+          node --check tools/validasi-data.mjs
+          node --check tools/enkripsi-data.mjs
+      - name: Tidak ada skrip atau gaya dari luar, CSP dan noindex terpasang
+        run: |
+          if grep -nE '<script[^>]+src="https?://|<link[^>]+href="https?://' index.html; then echo "Ada aset eksternal"; exit 1; fi
+          grep -q "Content-Security-Policy" index.html
+          grep -q 'name="robots" content="noindex' index.html
