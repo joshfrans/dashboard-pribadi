@@ -1,5 +1,0 @@
-# Data polos tidak boleh masuk repo — hanya data/tracker.enc.json
-data/tracker.json
-*.polos.json
-plain/
-.env
