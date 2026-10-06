@@ -2,7 +2,7 @@
 """Ubah dump database tracker (folder JSON per koleksi) menjadi data/tracker.json untuk halaman GitHub.
 
 Pakai:
-  python3 ekspor_tracker.py <folder_dump> <keluaran.json> [--profil publik|lengkap]
+  python3 ekspor_tracker.py <folder_dump> <keluaran.json> [--profil publik|lengkap] [--kalender kalender.json]
 
 <folder_dump> berisi subfolder tasks/, coc/, cr/, kpi/ dengan satu file JSON per dokumen
 (format keluaran ArtifactData out_dir). Profil:
@@ -98,9 +98,15 @@ def main():
         "coc": {k: coc(v, lengkap) for k, v in muat(src, "coc").items() if v.get("date")},
         "kpi": {k: kpi(v, lengkap) for k, v in muat(src, "kpi").items() if v.get("tenggat")},
     }
+    if "--kalender" in sys.argv:
+        kal = json.loads(pathlib.Path(sys.argv[sys.argv.index("--kalender") + 1]).read_text(encoding="utf-8"))
+        if lengkap:
+            data["kalender"] = kal
+        else:
+            print("kalender dilewati: hanya untuk profil lengkap (data terenkripsi)", file=sys.stderr)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"OK {dst} · profil {profil} · {len(data['tasks'])} tugas, {len(data['cr'])} CR, {len(data['coc'])} CoC, {len(data['kpi'])} KPI")
+    print(f"OK {dst} · profil {profil} · {len(data['tasks'])} tugas, {len(data['cr'])} CR, {len(data['coc'])} CoC, {len(data['kpi'])} KPI, {len(data.get('kalender', {}).get('acara', []))} acara kalender")
 
 
 if __name__ == "__main__":
