@@ -419,3 +419,48 @@ body.locked .shell{display:none}
 .lock-mark{display:block;width:36px;height:4px;border-radius:2px;background:var(--mark)}
 .lock-err{color:var(--bad)!important;font-weight:600}
 .side-foot .btn{justify-self:start;font-size:13px}
+
+/* --- unggah eviden & kalender (v4) --- */
+.up-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;margin-top:4px}
+.up-form label,.gh-form label{display:grid;gap:6px;font-size:13px;font-weight:600;min-width:0}
+.up-form select,.up-form input[type=date],.up-form input[type=text],.gh-form input{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:9px 10px;font-size:14px;min-height:40px;width:100%;min-width:0}
+.up-form input[type=file],.data-row input[type=file]{font-size:13px;max-width:100%}
+.up-form .up-file{grid-column:span 2}
+.up-form .up-hint{grid-column:1/-1;margin:0}
+.up-form .btn{grid-column:1/-1;justify-self:start;min-height:44px;padding:0 18px}
+.btn.primary[disabled]{opacity:.5;cursor:not-allowed}
+.gh-form{display:grid;gap:10px;max-width:560px}
+.gh-form p{margin:0}
+.gh-form .btn{justify-self:start;min-height:44px}
+.up-msg{margin:10px 0 0;font-size:13px;border-radius:8px;padding:9px 12px;background:var(--sunk);color:var(--fg)}
+.up-msg.ok{background:var(--ok-soft);color:var(--ok);font-weight:600}
+.up-msg.bad{background:var(--bad-soft);color:var(--bad);font-weight:600}
+.up-msg.warn{background:var(--warn-soft);color:var(--warn)}
+.data-box{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:grid;gap:8px}
+.data-box h3{font-size:15px;font-weight:700}
+.data-box p{margin:0}
+.data-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+table.evt{min-width:820px}
+.evt td.act{white-space:nowrap}
+.evt td.act .btn+.btn{margin-left:6px}
+.evt .fname{font-weight:600;overflow-wrap:anywhere}
+.card-h .btn{margin-left:auto}
+.kal{display:grid;gap:14px}
+.kal-src{margin:0 0 12px}
+.kday{display:grid;gap:6px}
+.kday-h{display:flex;align-items:center;gap:8px;font-size:14px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.kday.is-today .kday-h b{color:var(--accent)}
+.kev{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 10px;border-radius:10px;border-left:4px solid var(--line);background:var(--bg)}
+.kev .kt{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.kev .km{display:grid;gap:2px;min-width:0}
+.kev .km b{font-weight:600;overflow-wrap:anywhere}
+.kev .ks{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.kev .ks .btn{text-decoration:none;color:var(--fg)}
+.k-rapat{border-left-color:var(--accent)}
+.k-tenggat{border-left-color:var(--warn)}
+.k-milestone{border-left-color:var(--st-baru)}
+.k-rutin{border-left-color:var(--context)}
+.gcal{justify-self:start;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin-top:2px}
+.gcal:hover{border-color:var(--accent)}
+@media (max-width:900px){.up-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.up-form .up-file{grid-column:1/-1}.kev{grid-template-columns:minmax(0,1fr)}.kev .ks{justify-content:flex-start}}
+@media (max-width:600px){.up-form{grid-template-columns:minmax(0,1fr)}}
