@@ -51,6 +51,13 @@
   function paintSt(node, s) { node.style.setProperty("--c", "var(" + s.v + ")"); node.style.setProperty("--ci", "var(" + s.i + ")"); node.dataset.k = s.k; }
   var stMark = paintSt;
   function weekPct(all, ws) { var w = all.filter(function (t) { return inWeek(t, ws); }); return w.length ? Math.round(w.reduce(function (a, t) { return a + prog(t); }, 0) / w.length) : null; }
+  // rencana progres CR per hari ini: rata-rata porsi jadwal tiap sub-task yang sudah lewat (sumber: warna Gantt timeline)
+  function planPct(c, day) {
+    var it = c.rencana && c.rencana.item; if (!it || !it.length) return null;
+    var t = P(day || TODAY), sum = 0;
+    it.forEach(function (r) { if (!r || !r.mulai) return; var a = P(r.mulai), e = P(r.selesai), n = (e - a) / 864e5 + 1, k = (t - a) / 864e5 + 1; sum += Math.min(1, Math.max(0, k / n)); });
+    return Math.round(sum / it.length * 100);
+  }
   function cocIdx(ws) {
     var maju = 0, lama = 0, n = 0;
     [0, 1, 2, 3].forEach(function (i) { var c = D.coc[addD(ws, i)]; if (!c) return; n++; maju += (c.indeks || {}).maju || 0; lama += (c.indeks || {}).lama || 0; });
@@ -167,14 +174,18 @@
       var tr = el("span", "track");
       [25, 50, 75].forEach(function (g) { var l = el("i", "gl"); l.style.left = g + "%"; tr.appendChild(l); });
       if (c.progres != null) { var b = el("b"); b.style.width = c.progres + "%"; tr.appendChild(b); }
+      var pp = planPct(c);
+      if (pp != null) { var pm = el("i", "pm"); pm.style.left = pp + "%"; tr.appendChild(pm); }
       row.appendChild(tr);
-      row.appendChild(el("span", "v", c.progres == null ? "n/a" : c.progres + "%"));
+      var vv = el("span", "v"); vv.appendChild(el("b", null, c.progres == null ? "n/a" : c.progres + "%"));
+      if (pp != null) vv.appendChild(el("small", (c.progres || 0) < pp ? "behind" : null, "rcn " + pp + "%"));
+      row.appendChild(vv);
       var m = nextMs(c), nx = el("span", "nx");
       if (m && m.tanggal) { var dd = daysTo(m.tanggal); nx.appendChild(el("b", dd < 0 ? "past" : dd <= 3 ? "soon" : null, shortD(m.tanggal) + " · " + (dd < 0 ? "lewat " + Math.abs(dd) + " hr" : dd === 0 ? "hari ini" : dd + " hr lagi"))); nx.appendChild(el("small", null, m.nama)); }
       else nx.appendChild(el("small", null, m ? m.nama + " · tanpa tanggal" : "–"));
       row.appendChild(nx);
       row.appendChild(el("span", "chip " + (CRS[c.statusJadwal] || "s-hold"), c.statusJadwal || "–"));
-      tipOn(row, c.nama + ": " + (c.progres == null ? "n/a" : c.progres + "%") + " · " + (c.progresKet || "progres") + " · " + (c.statusJadwal || "–") + (m ? " · berikut: " + m.nama + (m.tanggal ? " (" + shortD(m.tanggal) + ")" : "") : ""));
+      tipOn(row, c.nama + ": " + (c.progres == null ? "n/a" : c.progres + "%") + " · " + (c.progresKet || "progres") + (pp != null ? " · rencana per hari ini " + pp + "% (" + ((c.progres || 0) - pp >= 0 ? "+" : "−") + Math.abs((c.progres || 0) - pp) + " poin)" : "") + " · " + (c.statusJadwal || "–") + (m ? " · berikut: " + m.nama + (m.tanggal ? " (" + shortD(m.tanggal) + ")" : "") : ""));
       box.appendChild(row);
     });
     var ax = $("#crAxis"); clear(ax);
@@ -232,8 +243,106 @@
     $("#kpiNote").textContent = "Managed Service " + (last.managed ? last.managed.done + "/" + last.managed.total + " item Done" : "n/a") + " pada laporan " + bln(last.id) + ". Batang tegas = laporan terbaru.";
   }
 
+  // ---- kinerja pribadi: target harian & mingguan ----
+  var TARGET = { tepat: 90, rutin: 100, mom: 100, prio: 100 };
+  function nowHM() { return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()); }
+  function wib(iso) {
+    var d = new Date(iso); if (isNaN(d)) return null;
+    var g = {}; new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).forEach(function (x) { g[x.type] = x.value; });
+    return g.year + "-" + g.month + "-" + g.day + "T" + g.hour + ":" + g.minute;
+  }
+  function dueAt(t) { return t.due + "T" + (t.time || "23:59"); }
+  function deadlinePassed(t) { return dueAt(t) < TODAY + "T" + nowHM(); }
+  function onTime(t) { if (t.status !== "done") return false; var w = t.doneAt && wib(t.doneAt); return !w || w <= dueAt(t); }
+  function judged(list) { return list.filter(function (t) { return t.status === "done" || deadlinePassed(t); }); }
+  function rate(list) { var j = judged(list); return j.length ? { pct: Math.round(j.filter(onTime).length / j.length * 100), ok: j.filter(onTime).length, n: j.length } : null; }
+  function isRutinCoc(t) { return /^(mom|rekap)-/.test(t.id); }
+  function isMomCr(t) { return /^(cresppd|crlayanan)-/.test(t.id); }
+  function weekTasks(all, ws) { var we = addD(ws, 4); return all.filter(function (t) { return t.due >= ws && t.due <= we; }); }
+  function tgtRow(o) {
+    var r = el("div", "tg"), nm = el("div", "tg-n"); nm.appendChild(el("b", null, o.nama)); nm.appendChild(el("span", "sub", o.sub)); r.appendChild(nm);
+    var tr = el("div", "tg-bar");
+    if (o.pct != null) { var t = el("span", "track"), b = el("b"); b.style.width = o.pct + "%"; t.appendChild(b); if (o.target != null) { var tk = el("i", "pm"); tk.style.left = o.target + "%"; t.appendChild(tk); } tr.appendChild(t); }
+    r.appendChild(tr);
+    var v = el("div", "tg-v"); v.appendChild(el("b", null, o.nilai)); v.appendChild(el("span", "sub", "target " + o.tgtTxt)); r.appendChild(v);
+    r.appendChild(el("span", "chip " + o.st[0], o.st[1]));
+    tipOn(r, o.nama + ": " + o.nilai + " · target " + o.tgtTxt + " · " + o.st[1]);
+    return r;
+  }
+  function renderKinerja() {
+    var box = $("#tgtList"); if (!box) return; clear(box);
+    if (!loaded) return;
+    var all = allTasks(), ws = monday(TODAY), wk = weekTasks(all, ws), rows = [];
+    $("#kinWeek").textContent = fmt(ws, { day: "numeric", month: "short" }) + " – " + fmt(addD(ws, 4), { day: "numeric", month: "short" }) + " · dinilai sampai " + fmt(TODAY, { weekday: "long" }) + " " + nowHM() + " WIB";
+    function rateRow(nama, list, target, sisa) {
+      var r = rate(list), tot = list.length;
+      if (!r) return { nama: nama, sub: tot ? tot + " terjadwal minggu ini · belum ada yang jatuh tempo" : "tidak ada jadwal minggu ini", pct: null, nilai: "–", tgtTxt: target + "%", st: ["s-hold", "Belum dinilai"] };
+      return { nama: nama, sub: r.ok + " dari " + r.n + " jatuh tempo selesai tepat waktu · " + tot + " terjadwal minggu ini" + (sisa ? sisa : ""), pct: r.pct, target: target, nilai: r.pct + "%", tgtTxt: (target === 100 ? "" : "≥ ") + target + "%", st: r.pct >= target ? ["s-done", "Sesuai target"] : ["s-late", "Di bawah target"] };
+    }
+    rows.push(rateRow("Rutin CoC tepat waktu", wk.filter(isRutinCoc), TARGET.rutin));
+    rows.push(rateRow("MoM Weekly CR ≤ 16.00", wk.filter(isMomCr), TARGET.mom));
+    rows.push(rateRow("Semua tugas tepat waktu", wk, TARGET.tepat));
+    var hp = wk.filter(function (t) { return t.prio === "tinggi"; }), hd = hp.filter(function (t) { return t.status === "done"; }).length, hdue = judged(hp).length;
+    rows.push(hp.length ? { nama: "Prioritas tinggi selesai", sub: hd + " dari " + hp.length + " tugas prioritas tinggi minggu ini · " + hdue + " sudah jatuh tempo", pct: Math.round(hd / hp.length * 100), target: TARGET.prio, nilai: hd + "/" + hp.length, tgtTxt: "semua sebelum Jumat 16.00", st: hd === hp.length ? ["s-done", "Tercapai"] : hd >= hdue ? ["s-ok", "On track"] : ["s-late", "Perlu percepatan"] } : { nama: "Prioritas tinggi selesai", sub: "tidak ada tugas prioritas tinggi minggu ini", pct: null, nilai: "–", tgtTxt: "100%", st: ["s-hold", "Belum dinilai"] });
+    var lt = all.filter(isLate).length;
+    rows.push({ nama: "Tugas lewat tenggat", sub: "semua tugas yang belum selesai dan sudah lewat tenggat", pct: null, nilai: String(lt), tgtTxt: "0", st: lt ? ["s-late", "Di bawah target"] : ["s-done", "Sesuai target"] });
+    var ym = TODAY.slice(0, 7), k = D.kpi[ym];
+    rows.push(k ? { nama: "KPI 4b " + bln(ym) + " tepat waktu", sub: k.tanggal ? "dikirim " + shortD(k.tanggal) + ", tenggat " + shortD(k.tenggat) : "belum dikirim · tenggat " + shortD(k.tenggat), pct: null, nilai: k.tanggal ? (k.tanggal <= k.tenggat ? "Tepat" : "Terlambat " + Math.round((P(k.tanggal) - P(k.tenggat)) / 864e5) + " hr") : "–", tgtTxt: "hari kerja ke-3", st: k.tanggal ? (k.tanggal <= k.tenggat ? ["s-done", "Sesuai target"] : ["s-late", "Di bawah target"]) : (k.tenggat < TODAY ? ["s-late", "Lewat tenggat"] : ["s-hold", "Belum dinilai"]) } : { nama: "KPI 4b bulan ini", sub: "belum ada data", pct: null, nilai: "–", tgtTxt: "hari kerja ke-3", st: ["s-hold", "Belum dinilai"] });
+    rows.forEach(function (o) { box.appendChild(tgtRow(o)); });
+    var ev = rows.filter(function (o) { return o.st[0] !== "s-hold"; }), met = ev.filter(function (o) { return o.st[0] === "s-done" || o.st[0] === "s-ok"; }).length;
+    var sc = $("#kScore"); clear(sc);
+    sc.appendChild(el("b", null, ev.length ? met + "/" + ev.length : "–"));
+    sc.appendChild(el("span", null, ev.length ? "target tercapai atau on track · " + (rows.length - ev.length) + " belum dinilai" : "belum ada target yang bisa dinilai"));
+    $(".kin-score").classList.toggle("is-bad", ev.length > 0 && met < ev.length);
+
+    // hari ini
+    var td = all.filter(function (t) { return t.due === TODAY; }), tdd = td.filter(function (t) { return t.status === "done"; }), open = td.filter(function (t) { return t.status !== "done"; }).sort(function (a, b) { return dueAt(a).localeCompare(dueAt(b)); });
+    var hs = $("#kinToday"); clear(hs);
+    [[tdd.length + "/" + td.length, "tugas hari ini selesai"], [open.length ? (open[0].time || "–") : "✓", open.length ? "tenggat berikut (WIB)" : "tidak ada yang tersisa"], [String(td.filter(function (t) { return t.status === "done" && t.viaEviden; }).length), "selesai lewat eviden"]].forEach(function (x) { var d = el("div", "kst"); d.appendChild(el("b", null, x[0])); d.appendChild(el("span", null, x[1])); hs.appendChild(d); });
+
+    // beban 10 hari kerja ke depan
+    var days = [], d = TODAY; if ([0, 6].indexOf(P(d).getUTCDay()) >= 0) d = nextWork(d);
+    while (days.length < 10) { days.push(d); d = nextWork(d); }
+    var cnt = days.map(function (x) { return all.filter(function (t) { return t.due === x && t.status !== "done"; }).length; }), mx = Math.max.apply(null, cnt.concat([1]));
+    var lc = $("#loadChart"); clear(lc);
+    days.forEach(function (x, i) {
+      var col = el("div", "lcol" + (cnt[i] === mx && mx > 0 ? " peak" : "") + (x === TODAY ? " today" : "")), bar = el("div", "lbar"), f = el("b");
+      f.style.height = (cnt[i] / mx * 100) + "%"; if (cnt[i]) f.appendChild(el("span", null, String(cnt[i]))); bar.appendChild(f); col.appendChild(bar);
+      col.appendChild(el("span", "ld", fmt(x, { weekday: "short" }) + " " + fmt(x, { day: "numeric" })));
+      tipOn(col, fmt(x, { weekday: "long", day: "numeric", month: "short" }) + ": " + cnt[i] + " tugas belum selesai");
+      lc.appendChild(col);
+    });
+    var pk = days[cnt.indexOf(mx)];
+    $("#loadNote").textContent = mx > 0 ? "Hari terpadat: " + fmt(pk, { weekday: "long", day: "numeric", month: "short" }) + " dengan " + mx + " tugas. Total " + cnt.reduce(function (a, b) { return a + b; }, 0) + " tugas terbuka dalam 10 hari kerja." : "Tidak ada tugas terbuka dalam 10 hari kerja ke depan.";
+
+    // tren tepat waktu per minggu
+    var tb = $("#otTrend"); clear(tb);
+    for (var w = 5; w >= 0; w--) {
+      var s0 = addD(ws, -7 * w), r = rate(weekTasks(all, s0)); if (!r && w > 0) continue;
+      var tr = el("tr"); tr.appendChild(el("td", null, w === 0 ? "Minggu ini" : "Mg " + fmt(s0, { day: "numeric", month: "short" })));
+      tr.appendChild(el("td", "num", r ? r.ok + "/" + r.n : "–"));
+      var tdb = el("td"), bb = el("span", "mini"); if (r) { var fb = el("b"); fb.style.width = r.pct + "%"; bb.appendChild(fb); var tk2 = el("i", "pm"); tk2.style.left = TARGET.tepat + "%"; bb.appendChild(tk2); } tdb.appendChild(bb); tr.appendChild(tdb);
+      tr.appendChild(el("td", "num", r ? r.pct + "%" : "n/a")); tb.appendChild(tr);
+    }
+
+    // kepatuhan KPI 4b
+    var kb = $("#kpiComp"); clear(kb);
+    Object.keys(D.kpi).sort().reverse().forEach(function (id) {
+      var x = D.kpi[id], tr = el("tr"); tr.appendChild(el("td", null, bln(id)));
+      tr.appendChild(el("td", "num", x.tanggal ? shortD(x.tanggal) : "–")); tr.appendChild(el("td", "num", x.tenggat ? shortD(x.tenggat) : "–"));
+      var ok = x.tanggal && x.tenggat && x.tanggal <= x.tenggat, c = el("td"); c.appendChild(el("span", "chip " + (!x.tanggal ? "s-hold" : ok ? "s-done" : "s-late"), !x.tanggal ? "Belum" : ok ? "Tepat waktu" : "Terlambat")); tr.appendChild(c); kb.appendChild(tr);
+    });
+
+    // CR: aktual vs rencana
+    var cp = $("#crPlan"); clear(cp);
+    var withPlan = crList().filter(function (c) { return planPct(c) != null; });
+    if (!withPlan.length) cp.appendChild(el("div", "empty", "Belum ada CR dengan jadwal rencana per sub-task."));
+    withPlan.forEach(function (c) { var pp = planPct(c), g = (c.progres || 0) - pp; cp.appendChild(tgtRow({ nama: c.nama, sub: c.rencana.sumber, pct: c.progres || 0, target: pp, nilai: (c.progres || 0) + "%", tgtTxt: pp + "% per hari ini", st: g >= 0 ? ["s-done", "Sesuai rencana"] : g >= -10 ? ["s-risk", "Tertinggal " + Math.abs(g) + " poin"] : ["s-late", "Tertinggal " + Math.abs(g) + " poin"] })); });
+    $("#crPlanNote").textContent = (crList().length - withPlan.length) + " CR lain belum punya jadwal sub-task yang bisa dibaca; minta vendor mengisi rencana progres mingguan di weekly CR.";
+  }
+
   // ---- navigasi view ----
-  var VIEWS = { ringkasan: "Ringkasan", kalender: "Kalender", eviden: "Unggah & arsip eviden", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
+  var VIEWS = { ringkasan: "Ringkasan", kinerja: "Kinerja pribadi", kalender: "Kalender", eviden: "Unggah & arsip eviden", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
   function route() {
     var v = (location.hash || "#ringkasan").slice(1);
     if (!VIEWS[v]) v = "ringkasan";
@@ -242,6 +351,7 @@
     $("#viewTitle").textContent = VIEWS[v];
     document.title = VIEWS[v] + " · Dashboard Strategi & Evaluasi";
     if (v === "cr") renderCR();
+    if (v === "kinerja") renderKinerja();
     window.scrollTo(0, 0);
   }
   function navBadges() {
@@ -337,6 +447,8 @@
       var nm = el("div", "cr-name"); nm.appendChild(el("b", null, c.nama)); nm.appendChild(el("small", null, [c.aplikasi, c.fase].filter(Boolean).join(" · "))); row.appendChild(nm);
       var pg = el("div", "c-prog"), bar = el("div", "bar"), fill = el("b"); fill.style.width = (c.progres || 0) + "%"; bar.appendChild(fill);
       var lab = el("span"); lab.appendChild(el("b", null, (c.progres == null ? "–" : c.progres) + "%")); lab.appendChild(document.createTextNode(" " + (c.progresKet || "progres")));
+      var pp2 = planPct(c);
+      if (pp2 != null) { var pm2 = el("i", "pm"); pm2.style.left = pp2 + "%"; bar.appendChild(pm2); var gap = (c.progres || 0) - pp2; lab.appendChild(el("em", gap < 0 ? "behind" : "ahead", " · rencana " + pp2 + "% (" + (gap >= 0 ? "+" : "−") + Math.abs(gap) + " poin)")); tipOn(pg, "Rencana per hari ini dari " + c.rencana.sumber); }
       pg.appendChild(bar); pg.appendChild(lab); row.appendChild(pg);
       var nx = el("div", "c-next"), m = nextMs(c);
       if (m) {
@@ -533,7 +645,7 @@
     $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden diunggah lewat menu Eviden; status lain dikelola di tracker privat.";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
-  function renderAll() { renderOverview(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); }
+  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); }
 
   // ---- data terenkripsi: kata sandi → PBKDF2 → AES-256-GCM (WebCrypto) ----
   var SKEY = "dse-pribadi:sandi";
