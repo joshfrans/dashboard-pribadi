@@ -6,6 +6,7 @@ Dashboard pribadi Officer Strategi & Evaluasi DIV GA, di-host di GitHub Pages. D
 
 | View | Isi |
 |---|---|
+| `#kinerja` | Skor minggu ini dan target harian/mingguan (rutin CoC & MoM weekly CR tepat waktu 100%, semua tugas ≥ 90%, prioritas tinggi selesai sebelum Jumat 16.00, tugas lewat tenggat 0, KPI 4b ≤ hari kerja ke-3); beban 10 hari kerja; tren tepat waktu; kepatuhan KPI 4b; CR aktual vs rencana |
 | `#kalender` | Agenda 14 hari dari Google Calendar (rapat CR, tenggat MoM, milestone CR, rutin) dengan status tugas terkait; daftar tugas yang belum ada di kalender + tombol **+ Google Calendar** |
 | `#eviden` | Unggah eviden (dienkripsi di browser, disimpan ke `eviden/`), arsip eviden (buka/unduh), koneksi GitHub, perbarui data dashboard dari file |
 | `#ringkasan` | CR terlambat + narasi otomatis; 4 KPI (progres tugas minggu ini, tugas lewat tenggat, indeks kemajuan CoC, status KPI 4b bulan berjalan); grafik progres CR; agenda 14 hari; komposisi status komitmen CoC; item Reengineering per laporan KPI 4b |
@@ -29,6 +30,10 @@ Dashboard pribadi Officer Strategi & Evaluasi DIV GA, di-host di GitHub Pages. D
 | `eviden/YYYY/MM/*.bin` | File eviden terenkripsi (format `DSE1` + salt + iv + AES-256-GCM) |
 | `tools/enkripsi-data.mjs` | JSON polos → `tracker.enc.json` (dan `--buka` untuk uji dekripsi) |
 | `.github/workflows/validasi.yml` | Cek otomatis: data tetap terenkripsi, tidak ada file polos/aset eksternal |
+
+## Rencana progres CR
+
+CR yang punya field `rencana` (daftar rentang `mulai`–`selesai` per sub-task, dibaca dari warna Gantt timeline) mendapat garis “rencana per hari ini” di grafik CR. Nilainya = rata-rata porsi jadwal tiap sub-task yang sudah lewat pada hari itu, sehingga bergerak otomatis setiap hari. Saat ini tersedia untuk ESPPD Lisdes (Timeline v2, Tahap 1) dan ESPPD Re-Engineering Ultimate; CR lain perlu jadwal sub-task dari vendor.
 
 ## Keamanan
 
