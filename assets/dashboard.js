@@ -48,7 +48,64 @@
 
   // ---- ringkasan (view eksekutif) ----
   var SEV = { "Terlambat": 0, "Berisiko": 1, "Perlu konfirmasi": 2, "Perlu update": 3, "Tertahan": 4, "Sesuai jadwal": 5, "Selesai": 6 };
-  function paintSt(node, s) { node.style.setProperty("--c", "var(" + s.v + ")"); node.style.setProperty("--ci", "var(" + s.i + ")"); }
+  function paintSt(node, s) { node.style.setProperty("--c", "var(" + s.v + ")"); node.style.setProperty("--ci", "var(" + s.i + ")"); node.dataset.k = s.k; }
+  var stMark = paintSt;
+  function weekPct(all, ws) { var w = all.filter(function (t) { return inWeek(t, ws); }); return w.length ? Math.round(w.reduce(function (a, t) { return a + prog(t); }, 0) / w.length) : null; }
+  function cocIdx(ws) {
+    var maju = 0, lama = 0, n = 0;
+    [0, 1, 2, 3].forEach(function (i) { var c = D.coc[addD(ws, i)]; if (!c) return; n++; maju += (c.indeks || {}).maju || 0; lama += (c.indeks || {}).lama || 0; });
+    return lama ? { pct: Math.round(maju / lama * 100), maju: maju, lama: lama, n: n } : null;
+  }
+  function delta(node, cur, prev) {
+    if (cur == null || prev == null) { node.hidden = true; return; }
+    var d = cur - prev; node.hidden = false;
+    node.className = "dl " + (d > 0 ? "up" : d < 0 ? "down" : "eq");
+    node.textContent = (d > 0 ? "▲ +" + d : d < 0 ? "▼ −" + Math.abs(d) : "= 0") + " poin vs minggu lalu (" + prev + "%)";
+  }
+  function nextWork(s) { var d = addD(s, 1); while ([0, 6].indexOf(P(d).getUTCDay()) >= 0) d = addD(d, 1); return d; }
+  function jenisForTask(id) { var j = JENIS.filter(function (j) { return j.tugas && id.indexOf(j.tugas) === 0; })[0]; return j ? j.k : null; }
+  function calTimeFor(t) {
+    var a = kalList().filter(function (a) { if (a.jenis === "tenggat" || a.sepanjangHari) return false; var r = relatedTask(a); return r && r.id === t.id; })[0];
+    return a ? a.mulai.slice(11, 16) : null;
+  }
+  function openUpload(jenis, tanggal) {
+    location.hash = "eviden";
+    $("#upJenis").value = jenis; $("#upTanggal").value = tanggal; syncUpHint();
+    setTimeout(function () { var f = $("#upFile"); f.scrollIntoView({ block: "center" }); f.focus(); }, 60);
+  }
+  function focusRow(t, grp) {
+    var done = t.status === "done", late = isLate(t), r = el("div", "fi" + (done ? " done" : late ? " late" : "")); r.setAttribute("role", "listitem");
+    var ct = calTimeFor(t), when = el("span", "ft");
+    when.appendChild(el("b", null, late ? shortD(t.due) : ct || (t.time ? "≤ " + t.time : "–")));
+    when.appendChild(el("small", null, late ? "tenggat lewat" : ct ? "jadwal" : "tenggat"));
+    r.appendChild(when);
+    var m = el("div", "fm"); m.appendChild(el("b", null, t.title)); m.appendChild(el("span", "sub", (CAT[t.cat] || "Tugas") + (t.prio === "tinggi" ? " · prioritas tinggi" : "") + (!done && t.time && ct ? " · tenggat " + t.time : ""))); r.appendChild(m);
+    var side = el("div", "fs");
+    if (done) side.appendChild(el("span", "chip s-done", t.viaEviden ? "Eviden masuk" : "Selesai"));
+    else if (late) side.appendChild(el("span", "chip s-late", "Terlambat"));
+    else if (t.status === "doing") side.appendChild(el("span", "chip s-risk", "Proses " + prog(t) + "%"));
+    else if (grp === "today") side.appendChild(el("span", "chip s-due", "Belum"));
+    var jk = jenisForTask(t.id);
+    if (jk && !done && grp === "today") { var b = el("button", "btn sm", "Unggah eviden"); b.type = "button"; b.addEventListener("click", function () { openUpload(jk, t.due); }); side.appendChild(b); }
+    r.appendChild(side);
+    return r;
+  }
+  function renderFocus(all) {
+    var box = $("#focusList"); clear(box);
+    var order = function (a, b) { return (a.status === "done") - (b.status === "done") || isLate(b) - isLate(a) || (b.routine ? 1 : 0) - (a.routine ? 1 : 0) || (b.prio === "tinggi") - (a.prio === "tinggi") || a.due.localeCompare(b.due); };
+    var td = all.filter(function (t) { return t.due === TODAY || isLate(t); }).sort(order);
+    var tmr = nextWork(TODAY), tm = all.filter(function (t) { return t.due === tmr && t.status !== "done"; }).sort(order);
+    var open = td.filter(function (t) { return t.status !== "done"; }).length;
+    $("#focusSub").textContent = open ? open + " belum selesai hari ini" : td.length ? "semua tugas hari ini selesai" : "";
+    box.appendChild(el("div", "fg", "Hari ini · " + fmt(TODAY, { weekday: "long", day: "numeric", month: "short" })));
+    if (!td.length) box.appendChild(el("div", "fi empty-f", "Tidak ada tugas bertenggat hari ini."));
+    td.forEach(function (t) { box.appendChild(focusRow(t, "today")); });
+    var TM = 3;
+    box.appendChild(el("div", "fg", (daysTo(tmr) === 1 ? "Besok" : "Hari kerja berikut") + " · " + fmt(tmr, { weekday: "long", day: "numeric", month: "short" })));
+    if (!tm.length) box.appendChild(el("div", "fi empty-f", "Belum ada tugas."));
+    tm.slice(0, TM).forEach(function (t) { box.appendChild(focusRow(t, "next")); });
+    if (tm.length > TM) { var a = el("a", "more", "+" + (tm.length - TM) + " tugas lain " + fmt(tmr, { weekday: "long" }) + " →"); a.href = "#tugas"; a.addEventListener("click", function () { filter = "open"; renderList(); }); box.appendChild(a); }
+  }
   function tipOn(node, text) { node.dataset.tip = text; node.tabIndex = 0; node.setAttribute("aria-label", text); }
   function crList() { return Object.keys(D.cr).map(function (id) { return Object.assign({ id: id }, D.cr[id]); }); }
   function cocWeek() { var ws = monday(TODAY); return [0, 1, 2, 3].map(function (i) { return D.coc[addD(ws, i)]; }).filter(Boolean); }
@@ -60,43 +117,51 @@
     var risk = crs.filter(function (c) { return c.statusJadwal === "Berisiko"; });
     var hn = $("#heroNum"); clear(hn);
     if (!loaded) { hn.textContent = "–"; return; }
-    hn.appendChild(document.createTextNode(String(late.length))); hn.appendChild(el("small", null, " / " + crs.length));
+    hn.textContent = String(late.length);
     var next = null;
     crs.forEach(function (c) { var m = nextMs(c); if (m && m.tanggal >= TODAY && (!next || m.tanggal < next.m.tanggal)) next = { c: c, m: m }; });
     var lateTasks = all.filter(isLate);
-    var parts = [];
-    parts.push(late.length ? late.length + " CR terlambat (" + late.map(function (c) { return c.nama; }).join(", ") + ")" : "Tidak ada CR terlambat");
-    if (risk.length) parts.push(risk.length + " berisiko");
-    var txt = parts.join(" dan ") + ".";
-    if (next) txt += " Milestone terdekat: " + next.m.nama + " (" + next.c.nama + ", " + shortD(next.m.tanggal) + ").";
-    txt += lateTasks.length ? " " + lateTasks.length + " tugas lewat tenggat." : " Tidak ada tugas lewat tenggat.";
+    var txt = (late.length ? "dari " + crs.length + " CR" : "Tidak ada CR terlambat dari " + crs.length + " CR") + (risk.length ? " · " + risk.length + " berisiko" : "") + ".";
     $("#heroText").textContent = txt;
+    $(".hero").classList.toggle("is-bad", late.length > 0);
+    var hl = $("#heroList"); clear(hl);
+    late.concat(risk).forEach(function (c) {
+      var li = el("li", c.statusJadwal === "Terlambat" ? "s-late" : "s-risk"), m = nextMs(c);
+      li.appendChild(el("b", null, c.nama));
+      li.appendChild(el("span", null, (c.statusJadwal === "Terlambat" ? "Terlambat" : "Berisiko") + " · " + (c.progres == null ? "n/a" : c.progres + "%") + (m && m.tanggal ? " · " + (daysTo(m.tanggal) < 0 ? "milestone lewat " + Math.abs(daysTo(m.tanggal)) + " hr" : "milestone " + shortD(m.tanggal)) : "")));
+      hl.appendChild(li);
+    });
+    renderFocus(all);
 
     // KPI tiles
     var week = all.filter(function (t) { return inWeek(t, ws); });
-    var wp = week.length ? Math.round(week.reduce(function (a, t) { return a + prog(t); }, 0) / week.length) : null;
+    var wp = weekPct(all, ws), wpPrev = weekPct(all, addD(ws, -7));
     $("#kWeek").textContent = wp === null ? "n/a" : wp + "%";
     $("#kWeekBar").style.width = (wp || 0) + "%";
     $("#kWeekSub").textContent = week.length ? week.filter(function (t) { return t.status === "done"; }).length + " dari " + week.length + " tugas selesai" : "Belum ada tugas minggu ini";
+    delta($("#kWeekDl"), wp, wpPrev);
     $("#kLate").textContent = String(lateTasks.length);
     $("#kLate").classList.toggle("is-bad", lateTasks.length > 0);
     $("#kLateSub").textContent = lateTasks.length ? "tertua: " + lateTasks.sort(function (a, b) { return a.due.localeCompare(b.due); })[0].title.slice(0, 60) : "semua tugas sesuai tenggat";
-    var cw = cocWeek(), maju = 0, lama = 0;
-    cw.forEach(function (c) { maju += (c.indeks || {}).maju || 0; lama += (c.indeks || {}).lama || 0; });
-    $("#kCoc").textContent = lama ? Math.round(maju / lama * 100) + "%" : "n/a";
-    $("#kCocSub").textContent = cw.length ? maju + " ÷ " + lama + " komitmen lama Selesai/Maju · " + cw.length + " bidang" : "Belum ada eviden CoC minggu ini";
-    var ym = TODAY.slice(0, 7), k = D.kpi[ym];
+    var ci = cocIdx(ws), ciPrev = cocIdx(addD(ws, -7));
+    $("#kCoc").textContent = ci ? ci.pct + "%" : "n/a";
+    $("#kCocSub").textContent = ci ? ci.maju + " ÷ " + ci.lama + " komitmen lama Selesai/Maju · " + ci.n + " bidang" : "Belum ada eviden CoC minggu ini";
+    delta($("#kCocDl"), ci && ci.pct, ciPrev && ciPrev.pct);
+    var cw = cocWeek();
+    var ym = TODAY.slice(0, 7), k = D.kpi[ym], kv = $("#kKpi");
     $("#kKpiL").textContent = "KPI 4b " + new Intl.DateTimeFormat("id-ID", { month: "long", timeZone: "UTC" }).format(P(ym + "-01"));
+    kv.className = "v";
     if (k) {
       var st = k.tanggal ? (k.tanggal <= k.tenggat ? "Tepat waktu" : "Terlambat") : (k.proses || (k.tenggat < TODAY ? "Lewat tenggat" : "Belum ada"));
-      $("#kKpi").textContent = st;
-      $("#kKpiSub").textContent = "tenggat " + shortD(k.tenggat) + (k.reeng ? " · Reengineering " + k.reeng.done + "/" + k.reeng.total : "");
-    } else { $("#kKpi").textContent = "n/a"; $("#kKpiSub").textContent = "Belum ada data bulan ini"; }
+      var cls = st === "Tepat waktu" ? "st-ok" : st === "Terlambat" || st === "Lewat tenggat" ? "st-bad" : "st-warn";
+      kv.textContent = st; kv.classList.add("v-st", cls);
+      $("#kKpiSub").textContent = (k.tanggal ? "dikirim " + shortD(k.tanggal) + " · " : "") + "tenggat " + shortD(k.tenggat) + (k.reeng ? " · Reengineering " + k.reeng.done + "/" + k.reeng.total : "");
+    } else { kv.textContent = "n/a"; $("#kKpiSub").textContent = "Belum ada data bulan ini"; }
 
-    // grafik CR: batang horizontal, satu skala 0–100
+    // grafik CR: batang horizontal satu skala 0–100 + milestone berikut (tanggal & selisih hari)
     var box = $("#crChart"); clear(box);
     crs.slice().sort(function (a, b) { return (SEV[a.statusJadwal] ?? 9) - (SEV[b.statusJadwal] ?? 9) || (a.progres || 0) - (b.progres || 0); }).forEach(function (c) {
-      var row = el("a", "hb"); row.href = "#cr"; row.setAttribute("role", "listitem");
+      var row = el("a", "hb " + (CRS[c.statusJadwal] || "s-hold")); row.href = "#cr"; row.setAttribute("role", "listitem");
       row.addEventListener("click", function () { crOpen = c.id; });
       row.appendChild(el("span", "n", c.nama));
       var tr = el("span", "track");
@@ -104,32 +169,36 @@
       if (c.progres != null) { var b = el("b"); b.style.width = c.progres + "%"; tr.appendChild(b); }
       row.appendChild(tr);
       row.appendChild(el("span", "v", c.progres == null ? "n/a" : c.progres + "%"));
+      var m = nextMs(c), nx = el("span", "nx");
+      if (m && m.tanggal) { var dd = daysTo(m.tanggal); nx.appendChild(el("b", dd < 0 ? "past" : dd <= 3 ? "soon" : null, shortD(m.tanggal) + " · " + (dd < 0 ? "lewat " + Math.abs(dd) + " hr" : dd === 0 ? "hari ini" : dd + " hr lagi"))); nx.appendChild(el("small", null, m.nama)); }
+      else nx.appendChild(el("small", null, m ? m.nama + " · tanpa tanggal" : "–"));
+      row.appendChild(nx);
       row.appendChild(el("span", "chip " + (CRS[c.statusJadwal] || "s-hold"), c.statusJadwal || "–"));
-      tipOn(row, c.nama + ": " + (c.progres == null ? "n/a" : c.progres + "%") + " · " + (c.progresKet || "progres") + " · " + (c.statusJadwal || "–"));
+      tipOn(row, c.nama + ": " + (c.progres == null ? "n/a" : c.progres + "%") + " · " + (c.progresKet || "progres") + " · " + (c.statusJadwal || "–") + (m ? " · berikut: " + m.nama + (m.tanggal ? " (" + shortD(m.tanggal) + ")" : "") : ""));
       box.appendChild(row);
     });
     var ax = $("#crAxis"); clear(ax);
     [0, 25, 50, 75, 100].forEach(function (v) { var s = el("span", null, v + "%"); s.style.left = v + "%"; ax.appendChild(s); });
 
-    // agenda 14 hari
+    // agenda 14 hari (5 teratas)
     var ag = [], end = addD(TODAY, 14);
-    crs.forEach(function (c) { (c.milestones || []).forEach(function (m) { if (m.tanggal && m.status !== "Selesai" && m.tanggal <= end && m.tanggal >= addD(TODAY, -7)) ag.push({ d: m.tanggal, t: m.nama, s: c.nama + (m.status ? " · " + m.status : "") }); }); });
-    all.forEach(function (t) { if (t.status !== "done" && !t.routine && t.due <= end) ag.push({ d: t.due, t: t.title, s: (CAT[t.cat] || "Tugas") + (t.prio === "tinggi" ? " · prioritas tinggi" : "") }); });
-    ((D.kalender || {}).acara || []).forEach(function (a) { var d = a.mulai.slice(0, 10); if (a.jenis === "rapat" && d >= TODAY && d <= end) ag.push({ d: d, t: a.judul, s: "Google Calendar · " + (a.sepanjangHari ? "sepanjang hari" : a.mulai.slice(11, 16) + " WIB") }); });
+    crs.forEach(function (c) { (c.milestones || []).forEach(function (m) { if (m.tanggal && m.status !== "Selesai" && m.tanggal <= end && m.tanggal >= TODAY) ag.push({ d: m.tanggal, t: m.nama, s: c.nama }); }); });
+    all.forEach(function (t) { if (t.status !== "done" && !t.routine && t.due >= TODAY && t.due <= end && t.prio === "tinggi") ag.push({ d: t.due, t: t.title, s: (CAT[t.cat] || "Tugas") + " · prioritas tinggi" }); });
+    ((D.kalender || {}).acara || []).forEach(function (a) { var d = a.mulai.slice(0, 10); if (a.jenis === "rapat" && d >= TODAY && d <= end) ag.push({ d: d, t: a.judul, s: "Rapat · " + (a.sepanjangHari ? "sepanjang hari" : a.mulai.slice(11, 16) + " WIB") }); });
     ag.sort(function (a, b) { return a.d.localeCompare(b.d); });
-    var abox = $("#agenda"); clear(abox);
+    var abox = $("#agenda"), AGN = 5; clear(abox);
     if (!ag.length) abox.appendChild(el("div", "empty", "Tidak ada agenda 14 hari ke depan."));
-    ag.slice(0, 7).forEach(function (a) {
-      var dd = daysTo(a.d), r = el("div", "ag"), w = el("div", "when" + (dd < 0 ? " past" : ""));
-      w.appendChild(el("b", null, fmt(a.d, { day: "numeric", month: "short" }))); w.appendChild(document.createTextNode(dd < 0 ? Math.abs(dd) + " hr lewat" : dd === 0 ? "hari ini" : dd + " hr lagi"));
+    ag.slice(0, AGN).forEach(function (a) {
+      var dd = daysTo(a.d), r = el("div", "ag"), w = el("div", "when");
+      w.appendChild(el("b", null, fmt(a.d, { day: "numeric", month: "short" }))); w.appendChild(document.createTextNode(dd === 0 ? "hari ini" : dd === 1 ? "besok" : dd + " hr lagi"));
       var wh = el("div", "what"); wh.appendChild(el("b", null, a.t)); wh.appendChild(el("span", null, a.s));
       r.appendChild(w); r.appendChild(wh); abox.appendChild(r);
     });
-    if (ag.length > 7) abox.appendChild(el("p", "table-note", "+" + (ag.length - 7) + " agenda lain di Daftar tugas dan Monitoring CR."));
+    if (ag.length > AGN) { var more = el("a", "more", "+" + (ag.length - AGN) + " agenda lain di Kalender →"); more.href = "#kalender"; abox.appendChild(more); }
 
     // komposisi status CoC per bidang (minggu ini; jika kosong, 4 CoC terakhir)
     var lg = $("#cocLegend"); clear(lg);
-    ST.forEach(function (s) { var sp = el("span", null, s.k); sp.style.setProperty("--c", "var(" + s.v + ")"); lg.appendChild(sp); });
+    ST.forEach(function (s) { var sp = el("span", null, s.k); stMark(sp, s); lg.appendChild(sp); });
     var list = cw.length ? cw : Object.keys(D.coc).sort().reverse().slice(0, 4).map(function (id) { return D.coc[id]; });
     var cb = $("#cocChart"); clear(cb);
     if (!list.length) cb.appendChild(el("div", "empty", "Belum ada eviden CoC."));
@@ -138,7 +207,7 @@
       t.appendChild(el("b", null, c.bidang + " · " + fmt(c.date, { day: "numeric", month: "short" })));
       t.appendChild(el("span", null, "indeks " + (ix.persen == null ? "n/a" : ix.persen + "%") + " · " + (c.jumlahKomitmen || 0) + " komitmen"));
       var bar = el("div", "cbar"), tot = c.jumlahKomitmen || 0;
-      ST.forEach(function (s) { var n = (c.status || {})[s.k] || 0; if (!n || !tot) return; var i = el("i"); i.style.flex = n + " 0 0"; i.style.setProperty("--c", "var(" + s.v + ")"); tipOn(i, c.bidang + " · " + s.k + ": " + n + " dari " + tot + " (" + Math.round(n / tot * 100) + "%)"); bar.appendChild(i); });
+      ST.forEach(function (s) { var n = (c.status || {})[s.k] || 0; if (!n || !tot) return; var i = el("i"); i.style.flex = n + " 0 0"; stMark(i, s); tipOn(i, c.bidang + " · " + s.k + ": " + n + " dari " + tot + " (" + Math.round(n / tot * 100) + "%)"); bar.appendChild(i); });
       row.appendChild(t); row.appendChild(bar); cb.appendChild(row);
     });
 
@@ -180,6 +249,7 @@
     var a = $("#navCr"), b = $("#navLate");
     a.hidden = !late; a.textContent = String(late); a.setAttribute("aria-label", late + " CR terlambat");
     b.hidden = !lt; b.textContent = String(lt); b.setAttribute("aria-label", lt + " tugas terlambat");
+    var mc = $("#navMoreCnt"); mc.hidden = !late; mc.textContent = String(late); mc.setAttribute("aria-label", late + " CR terlambat");
   }
 
   // ---- tooltip (hover & fokus keyboard) ----
@@ -211,9 +281,9 @@
         if (r.days.indexOf(i) < 0) { var na = el("td", "na", "—"); na.setAttribute("aria-label", "Tidak dijadwalkan"); tr.appendChild(na); return; }
         var t = D.tasks[r.key + "-" + d];
         var td = el("td"), c = el("div", "cell");
-        c.dataset.st = t ? t.status : "none";
-        if (t && isLate(t)) c.dataset.late = "1";
-        c.textContent = !t ? "–" : t.status === "done" ? "✓ Selesai" : t.status === "doing" ? "Proses " + prog(t) + "%" : (isLate(t) ? "Terlambat" : "Belum");
+        var stt = !t ? "none" : t.status === "done" ? "done" : isLate(t) ? "late" : t.status === "doing" ? "doing" : t.due === TODAY ? "today" : "plan";
+        c.dataset.st = stt;
+        c.textContent = { none: "–", done: "✓ Selesai", late: "! Terlambat", doing: "Proses " + (t ? prog(t) : 0) + "%", today: "○ Hari ini", plan: "Terjadwal" }[stt];
         c.setAttribute("aria-label", r.title + " " + shortD(d) + ": " + (t ? c.textContent : "belum dibuat"));
         td.appendChild(c); tr.appendChild(td);
       });
@@ -224,16 +294,20 @@
   function renderTrend() {
     var box = $("#trend"); clear(box);
     var all = allTasks(), cur = monday(TODAY);
+    var shown = 0;
     for (var k = 3; k >= 0; k--) {
       var ws = addD(cur, -7 * k);
-      var w = all.filter(function (t) { return inWeek(t, ws); });
-      var p = w.length ? Math.round(w.reduce(function (a, t) { return a + prog(t); }, 0) / w.length) : null;
+      var p = weekPct(all, ws);
+      if (p === null && k > 0) continue;
+      shown++;
       var row = el("div", "trow" + (k === 0 ? " cur" : ""));
       row.appendChild(el("span", "lab", k === 0 ? "Minggu ini" : "Mg " + fmt(ws, { day: "numeric", month: "short" })));
       var bar = el("div", "bar"), b = el("b"); b.style.width = (p || 0) + "%"; bar.appendChild(b); row.appendChild(bar);
       row.appendChild(el("span", "num", p === null ? "n/a" : p + "%"));
       box.appendChild(row);
     }
+    var note = $("#trendNote"); note.hidden = shown > 1;
+    note.textContent = "Tren mulai terlihat setelah ada tugas bertenggat di minggu-minggu sebelumnya.";
   }
 
   // ---- CR ----
@@ -319,10 +393,10 @@
     var idx = el("div", "idx"); idx.appendChild(el("b", "num", ix.persen == null ? "–" : ix.persen + "%"));
     idx.appendChild(el("span", null, "indeks kemajuan · " + (ix.maju || 0) + " ÷ " + (ix.lama || 0) + " komitmen lama")); card.appendChild(idx);
     var st = el("div", "stack"); st.setAttribute("aria-hidden", "true");
-    ST.forEach(function (s) { if (m[s.k] && tot) { var b = el("i"); b.style.width = (m[s.k] / tot * 100) + "%"; b.style.background = "var(" + s.v + ")"; b.title = s.k + ": " + m[s.k]; st.appendChild(b); } });
+    ST.forEach(function (s) { if (m[s.k] && tot) { var b = el("i"); b.style.width = (m[s.k] / tot * 100) + "%"; stMark(b, s); b.title = s.k + ": " + m[s.k]; st.appendChild(b); } });
     card.appendChild(st);
     var cn = el("div", "counts");
-    ST.forEach(function (s) { if (m[s.k]) { var sp = el("span", null, s.k + " " + m[s.k]); sp.style.setProperty("--c", "var(" + s.v + ")"); cn.appendChild(sp); } });
+    ST.forEach(function (s) { if (m[s.k]) { var sp = el("span", null, s.k + " " + m[s.k]); stMark(sp, s); cn.appendChild(sp); } });
     card.appendChild(cn);
     var fl = el("div", "files");
     (c.eviden || []).forEach(function (k) { fl.appendChild(el("span", "ev-tag ok", k + " ✓")); });
@@ -737,40 +811,83 @@
     var s = t.title.toLowerCase();
     return kalList().some(function (a) { return evDate(a) === t.due && (a.judul || "").toLowerCase().split(/\W+/).filter(function (w) { return w.length > 4; }).some(function (w) { return s.indexOf(w) >= 0; }); });
   }
+  var kalMode = (function () { try { return window.localStorage.getItem("dse-pribadi:kal") === "list" ? "list" : "week"; } catch (e) { return "week"; } })();
+  var kalWeek = monday(TODAY);
+  function evState(a) {
+    var t = relatedTask(a); if (!t) return null;
+    if (t.status === "done") return { c: "s-done", t: t.viaEviden ? "Eviden masuk" : "Selesai" };
+    if (t.due < TODAY) return { c: "s-late", t: "Terlambat" };
+    if (evDate(a) === TODAY || t.due === TODAY) return { c: "s-due", t: "Belum" };
+    return null; // terjadwal: tanpa chip
+  }
+  function evSort(a, b) { return (b.sepanjangHari ? 1 : 0) - (a.sepanjangHari ? 1 : 0) || a.mulai.localeCompare(b.mulai); }
+  function evBlock(a) {
+    var st = evState(a), r = el(a.link ? "a" : "div", "kev k-" + (a.jenis || "lain") + (st && st.c === "s-done" ? " is-done" : ""));
+    if (a.link) { r.href = a.link; r.target = "_blank"; r.rel = "noopener noreferrer"; r.setAttribute("aria-label", a.judul + ", " + evTime(a) + (st ? ", " + st.t : "") + " — buka di Google Calendar"); }
+    r.appendChild(el("span", "kt", evTime(a)));
+    var mid = el("span", "km"); mid.appendChild(el("b", null, a.judul)); mid.appendChild(el("span", "sub", KJ[a.jenis] || "Acara")); r.appendChild(mid);
+    if (st) r.appendChild(el("span", "chip " + st.c, st.t));
+    return r;
+  }
   function renderKalender() {
     var box = $("#kalList"); if (!box) return; clear(box);
     var K = D.kalender || null, src = $("#kalSrc");
-    if (!K) { src.textContent = "Data kalender belum ada di data dashboard. Minta Claude “perbarui dashboard pribadi” untuk menarik agenda Google Calendar."; }
-    else src.textContent = "Dari Google Calendar " + (K.kalender || "utama") + " · diambil " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(K.diambil)) + " WIB · " + (K.acara || []).length + " acara";
-    var from = addD(TODAY, -1), to = addD(TODAY, 14), byDay = {};
-    kalList().forEach(function (a) { var d = evDate(a); if (d >= from && d <= to) (byDay[d] = byDay[d] || []).push(a); });
-    var days = Object.keys(byDay).sort();
-    if (!days.length && K) box.appendChild(el("div", "empty", "Tidak ada acara 14 hari ke depan."));
-    days.forEach(function (d) {
-      var g = el("div", "kday" + (d === TODAY ? " is-today" : "")), h = el("div", "kday-h");
-      h.appendChild(el("b", null, fmt(d, { weekday: "long", day: "numeric", month: "long" }))); if (d === TODAY) h.appendChild(el("span", "fchip ok", "Hari ini"));
-      g.appendChild(h);
-      byDay[d].forEach(function (a) {
-        var r = el("div", "kev k-" + (a.jenis || "lain"));
-        r.appendChild(el("span", "kt", evTime(a)));
-        var mid = el("div", "km"); mid.appendChild(el("b", null, a.judul)); mid.appendChild(el("span", "sub", KJ[a.jenis] || "Acara")); r.appendChild(mid);
-        var side = el("div", "ks"), t = relatedTask(a);
-        if (t) side.appendChild(el("span", "chip " + (t.status === "done" ? "s-done" : t.due < TODAY ? "s-late" : "s-hold"), t.status === "done" ? (t.viaEviden ? "Eviden masuk" : "Selesai") : t.due < TODAY ? "Belum selesai" : "Belum"));
-        if (a.link) { var l = el("a", "btn", "Buka"); l.href = a.link; l.target = "_blank"; l.rel = "noopener noreferrer"; l.setAttribute("aria-label", "Buka di Google Calendar: " + a.judul); side.appendChild(l); }
-        r.appendChild(side); g.appendChild(r);
+    if (!K) { src.textContent = "Data kalender belum ada. Minta Claude “perbarui dashboard pribadi” untuk menarik agenda Google Calendar"; }
+    else src.textContent = "Google Calendar " + (K.kalender || "utama") + " · diambil " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(K.diambil)) + " WIB · " + (K.acara || []).length + " acara";
+    $("#kWeekLbl").textContent = fmt(kalWeek, { day: "numeric", month: "short" }) + " – " + fmt(addD(kalWeek, 6), { day: "numeric", month: "short", year: "numeric" });
+    document.querySelectorAll("[data-km]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.km === kalMode)); });
+    box.className = "kal-" + kalMode;
+    var wEnd = addD(kalWeek, 6), evs = kalList().filter(function (a) { var d = evDate(a); return d >= kalWeek && d <= wEnd; });
+    if (!evs.length) { box.appendChild(el("div", "empty", K ? "Tidak ada acara di minggu ini (data kalender mencakup " + fmt(evDate(kalList()[0] || { mulai: TODAY }), { day: "numeric", month: "short" }) + " – " + fmt(evDate(kalList().slice(-1)[0] || { mulai: TODAY }), { day: "numeric", month: "short" }) + ")." : "Belum ada data kalender.")); }
+    else if (kalMode === "week") {
+      var days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return addD(kalWeek, i); }).filter(function (d, i) { return i < 5 || evs.some(function (a) { return evDate(a) === d; }); });
+      var grid = el("div", "kweek"); grid.style.setProperty("--n", days.length);
+      days.forEach(function (d) {
+        var col = el("div", "kcol" + (d === TODAY ? " is-today" : "") + (d < TODAY ? " is-past" : "")), h = el("div", "kcol-h");
+        h.appendChild(el("b", null, fmt(d, { weekday: "long" }))); h.appendChild(el("span", null, fmt(d, { day: "numeric", month: "short" })));
+        if (d === TODAY) h.appendChild(el("span", "fchip ok", "Hari ini"));
+        col.appendChild(h);
+        var list = evs.filter(function (a) { return evDate(a) === d; }).sort(evSort);
+        if (!list.length) col.appendChild(el("div", "kempty", "Tidak ada acara"));
+        list.forEach(function (a) { col.appendChild(evBlock(a)); });
+        grid.appendChild(col);
       });
-      box.appendChild(g);
-    });
+      box.appendChild(grid);
+    } else {
+      // rutin berulang diringkas jadi satu baris per minggu
+      var rut = {}, other = [];
+      evs.forEach(function (a) { if (a.jenis === "rutin" && a.berulang) { var k = a.judul + "|" + evTime(a); (rut[k] = rut[k] || []).push(a); } else other.push(a); });
+      var keys = Object.keys(rut);
+      if (keys.length) {
+        var g = el("div", "kday"); g.appendChild(el("div", "kday-h", null)).appendChild(el("b", null, "Rutin minggu ini"));
+        keys.forEach(function (k) {
+          var occ = rut[k].sort(evSort), a0 = occ[0], r = el(a0.link ? "a" : "div", "kev k-rutin");
+          if (a0.link) { r.href = a0.link; r.target = "_blank"; r.rel = "noopener noreferrer"; }
+          r.appendChild(el("span", "kt", evTime(a0)));
+          var mid = el("span", "km"); mid.appendChild(el("b", null, a0.judul));
+          var ds = el("span", "rdays");
+          occ.forEach(function (a) { var st = evState(a), d = evDate(a), sp = el("span", "rd " + (st ? st.c : "s-plan"), fmt(d, { weekday: "short" }) + (st ? (st.c === "s-done" ? " ✓" : st.c === "s-late" ? " !" : " ○") : "")); sp.setAttribute("aria-label", fmt(d, { weekday: "long", day: "numeric", month: "short" }) + ": " + (st ? st.t : "terjadwal")); ds.appendChild(sp); });
+          mid.appendChild(ds); r.appendChild(mid); g.appendChild(r);
+        });
+        box.appendChild(g);
+      }
+      var byDay = {}; other.forEach(function (a) { (byDay[evDate(a)] = byDay[evDate(a)] || []).push(a); });
+      Object.keys(byDay).sort().forEach(function (d) {
+        var g = el("div", "kday" + (d === TODAY ? " is-today" : "")), h = el("div", "kday-h");
+        h.appendChild(el("b", null, fmt(d, { weekday: "long", day: "numeric", month: "long" }))); if (d === TODAY) h.appendChild(el("span", "fchip ok", "Hari ini"));
+        g.appendChild(h); byDay[d].sort(evSort).forEach(function (a) { g.appendChild(evBlock(a)); }); box.appendChild(g);
+      });
+    }
     // tugas yang belum ada di kalender
     var miss = $("#kalMiss"); clear(miss);
-    var todo = allTasks().filter(function (t) { return t.status !== "done" && t.due >= TODAY && t.due <= addD(TODAY, 30) && !onCalendar(t); }).sort(function (a, b) { return a.due.localeCompare(b.due); });
+    var todo = allTasks().filter(function (t) { return t.status !== "done" && t.due >= TODAY && t.due <= addD(TODAY, 30) && !onCalendar(t); }).sort(function (a, b) { return a.due.localeCompare(b.due) || (b.prio === "tinggi") - (a.prio === "tinggi"); });
     $("#kalMissN").textContent = todo.length ? todo.length + " tugas" : "";
     if (!todo.length) miss.appendChild(el("div", "empty", "Semua tugas 30 hari ke depan sudah ada di kalender atau selesai."));
     todo.forEach(function (t) {
-      var r = el("div", "kev"); r.appendChild(el("span", "kt", shortD(t.due) + (t.time ? " " + t.time : "")));
+      var r = el("div", "mrow"); r.appendChild(el("span", "kt", shortD(t.due) + (t.time ? " · " + t.time : "")));
       var mid = el("div", "km"); mid.appendChild(el("b", null, t.title)); mid.appendChild(el("span", "sub", (CAT[t.cat] || "Tugas") + (t.prio === "tinggi" ? " · prioritas tinggi" : ""))); r.appendChild(mid);
-      var side = el("div", "ks"), l = el("a", "btn", "+ Google Calendar"); l.href = gcalLink(t); l.target = "_blank"; l.rel = "noopener noreferrer"; l.setAttribute("aria-label", "Tambah ke Google Calendar: " + t.title);
-      side.appendChild(l); r.appendChild(side); miss.appendChild(r);
+      var l = el("a", "gcal", "+ Kalender"); l.href = gcalLink(t); l.target = "_blank"; l.rel = "noopener noreferrer"; l.setAttribute("aria-label", "Tambah ke Google Calendar: " + t.title);
+      r.appendChild(l); miss.appendChild(r);
     });
   }
 
@@ -790,6 +907,12 @@
   });
   $("#ghForget").addEventListener("click", function () { tokenForget(); var m = $("#ghMsg"); m.hidden = false; m.className = "up-msg"; m.textContent = "Token dihapus dari perangkat ini. Cabut juga di GitHub jika tidak dipakai lagi."; renderEvidenView(); });
   $("#dataBtn").addEventListener("click", doUpdateData);
+  document.querySelectorAll("[data-km]").forEach(function (b) { b.addEventListener("click", function () { kalMode = b.dataset.km; try { window.localStorage.setItem("dse-pribadi:kal", kalMode); } catch (e) { } renderKalender(); }); });
+  $("#kPrev").addEventListener("click", function () { kalWeek = addD(kalWeek, -7); renderKalender(); });
+  $("#kNext").addEventListener("click", function () { kalWeek = addD(kalWeek, 7); renderKalender(); });
+  $("#kThis").addEventListener("click", function () { kalWeek = monday(TODAY); renderKalender(); });
+  $("#navMore").addEventListener("click", function () { var n = $(".nav"), o = !n.classList.contains("more"); n.classList.toggle("more", o); this.setAttribute("aria-expanded", String(o)); });
+  document.querySelectorAll(".nav a").forEach(function (a) { a.addEventListener("click", function () { $(".nav").classList.remove("more"); $("#navMore").setAttribute("aria-expanded", "false"); }); });
   $("#evRefresh").addEventListener("click", function () { evLoad(); });
 
   function load() {
@@ -833,7 +956,7 @@
   load();
   setInterval(function () {
     var t = todayStr();
-    if (t !== TODAY) { TODAY = t; weekStart = monday(t); $("#todayLbl").textContent = fmt(TODAY, { weekday: "short", day: "numeric", month: "short", year: "numeric" }); renderAll(); }
+    if (t !== TODAY) { TODAY = t; weekStart = monday(t); kalWeek = monday(t); $("#todayLbl").textContent = fmt(TODAY, { weekday: "short", day: "numeric", month: "short", year: "numeric" }); renderAll(); }
     poll();
   }, POLL_MS);
 })();
