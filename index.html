@@ -7,8 +7,8 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Dashboard Pribadi · Strategi &amp; Evaluasi</title>
-<link rel="stylesheet" href="assets/dashboard.css?v=20261007-1">
-<script src="assets/dashboard.js?v=20261007-1" defer></script>
+<link rel="stylesheet" href="assets/dashboard.css?v=20261007-2">
+<script src="assets/dashboard.js?v=20261007-2" defer></script>
 </head>
 <body>
 <a class="skip" href="#konten">Langsung ke isi</a>
@@ -17,6 +17,7 @@
     <div class="brand"><i></i><b>Dashboard Pribadi</b><span>Officer Strategi &amp; Evaluasi · DIV GA</span></div>
     <nav class="nav">
       <a href="#ringkasan" data-nav="ringkasan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Ringkasan</a>
+      <a href="#kinerja" data-nav="kinerja"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Kinerja</a>
       <a href="#kalender" data-nav="kalender"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>Kalender</a>
       <a href="#eviden" data-nav="eviden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>Unggah eviden</a>
       <a href="#rutin" data-nav="rutin"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Rutin mingguan</a>
@@ -65,7 +66,7 @@
         <div class="card kpi-t"><div class="l" id="kKpiL">KPI 4b bulan ini</div><div class="v" id="kKpi">–</div><div class="d" id="kKpiSub">—</div></div>
       </div>
       <div class="card">
-        <div class="card-h"><h2>Progres CR aplikasi</h2><span class="sub">% progres dan milestone berikut, urut menurut status jadwal</span><a href="#cr">Rincian CR →</a></div>
+        <div class="card-h"><h2>Progres CR aplikasi</h2><span class="sub">% progres · <i class="pm-key" aria-hidden="true"></i> rencana per hari ini (bila jadwal tersedia) · urut menurut status jadwal</span><a href="#cr">Rincian CR →</a></div>
         <div class="hb hb-head" aria-hidden="true"><span>CR</span><span>Progres</span><span></span><span>Milestone berikut</span><span>Status jadwal</span></div>
         <div class="hbars" id="crChart" role="list"></div>
         <div class="axis" aria-hidden="true"><span></span><div class="ticks" id="crAxis"></div><span></span><span></span><span></span></div>
@@ -88,6 +89,45 @@
           <div class="agenda" id="agenda"></div>
         </div>
       </div>
+    </section>
+
+    <!-- KINERJA -->
+    <section class="view" id="v-kinerja" hidden>
+      <div class="card kin-head">
+        <div class="kin-score"><div class="lbl">Skor minggu ini</div><div id="kScore"><b>–</b></div></div>
+        <div class="kin-tgt">
+          <div class="card-h"><h2>Target harian &amp; mingguan</h2><span class="sub" id="kinWeek"></span></div>
+          <div class="tgl" id="tgtList" role="list"></div>
+        </div>
+      </div>
+      <div class="grid-1-1">
+        <div class="card">
+          <div class="card-h"><h2>Hari ini</h2><a href="#ringkasan">Fokus hari ini →</a></div>
+          <div class="kstats" id="kinToday"></div>
+          <p class="table-note">Target harian: semua tugas bertenggat hari ini selesai sebelum jamnya, dan eviden diunggah di hari yang sama.</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Beban kerja 10 hari kerja</h2><span class="sub">tugas terbuka per tanggal tenggat</span></div>
+          <div class="lchart" id="loadChart"></div>
+          <p class="table-note" id="loadNote"></p>
+        </div>
+      </div>
+      <div class="grid-1-1">
+        <div class="card">
+          <div class="card-h"><h2>Tren tepat waktu</h2><span class="sub">tugas jatuh tempo yang selesai sebelum tenggat · garis = target</span></div>
+          <div class="kbox2"><table class="kpi kin-t"><thead><tr><th scope="col">Minggu</th><th scope="col">Tepat / dinilai</th><th scope="col">Porsi</th><th scope="col">%</th></tr></thead><tbody id="otTrend"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Kepatuhan KPI 4b</h2><span class="sub">laporan bulanan · tenggat hari kerja ke-3</span></div>
+          <div class="kbox2"><table class="kpi kin-t"><thead><tr><th scope="col">Bulan</th><th scope="col">Dikirim</th><th scope="col">Tenggat</th><th scope="col">Status</th></tr></thead><tbody id="kpiComp"></tbody></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Jadwal CR: aktual vs rencana</h2><span class="sub">garis = progres yang seharusnya tercapai per hari ini</span><a href="#cr">Monitoring CR →</a></div>
+        <div class="tgl" id="crPlan"></div>
+        <p class="table-note" id="crPlanNote"></p>
+      </div>
+      <p class="table-note kin-how">Cara menilai: tugas dinilai setelah selesai atau setelah tenggatnya lewat. “Tepat waktu” berarti waktu selesai (atau waktu unggah eviden) tidak melewati tanggal dan jam tenggat (WIB). Target: rutin CoC dan MoM weekly CR 100%, semua tugas ≥ 90%, prioritas tinggi selesai sebelum Jumat 16.00, tugas lewat tenggat 0, KPI 4b paling lambat hari kerja ke-3.</p>
     </section>
 
     <!-- KALENDER -->
