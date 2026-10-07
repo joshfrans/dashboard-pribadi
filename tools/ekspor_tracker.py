@@ -31,7 +31,7 @@ def tugas(d):
 
 
 def cr(d, lengkap):
-    keep = ["nama", "aplikasi", "fase", "progres", "progresKet", "statusJadwal", "ringkasan", "milestones", "update", "urut"]
+    keep = ["nama", "aplikasi", "fase", "progres", "progresKet", "statusJadwal", "ringkasan", "milestones", "update", "urut", "rencana"]
     if lengkap:
         keep += ["isu", "sumber"]
     return {k: d.get(k) for k in keep if k in d}
