@@ -43,6 +43,11 @@ for (const [id, c] of Object.entries(data.cr || {})) {
   if (!c.nama) errors.push(`cr/${id}: nama kosong`);
   if (c.progres != null && (c.progres < 0 || c.progres > 100)) errors.push(`cr/${id}: progres di luar 0–100`);
   for (const m of c.milestones || []) if (m.tanggal && !tgl.test(m.tanggal)) errors.push(`cr/${id}: tanggal milestone tidak valid (${m.tanggal})`);
+  if (c.rencana != null) {
+    const it = c.rencana.item;
+    if (!Array.isArray(it) || !it.length) errors.push(`cr/${id}: rencana.item harus daftar rentang jadwal sub-task`);
+    else for (const r of it) if (r.mulai != null && (!tgl.test(r.mulai) || !tgl.test(r.selesai || "") || r.selesai < r.mulai)) errors.push(`cr/${id}: rentang rencana tidak valid (${r.mulai}–${r.selesai})`);
+  }
 }
 for (const [id, c] of Object.entries(data.coc || {})) {
   if (!tgl.test(c.date || "")) errors.push(`coc/${id}: date tidak valid`);
