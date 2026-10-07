@@ -7,8 +7,8 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Dashboard Pribadi · Strategi &amp; Evaluasi</title>
-<link rel="stylesheet" href="assets/dashboard.css?v=20261006-4">
-<script src="assets/dashboard.js?v=20261006-4" defer></script>
+<link rel="stylesheet" href="assets/dashboard.css?v=20261007-1">
+<script src="assets/dashboard.js?v=20261007-1" defer></script>
 </head>
 <body>
 <a class="skip" href="#konten">Langsung ke isi</a>
@@ -24,6 +24,7 @@
       <a href="#coc" data-nav="coc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Eviden CoC</a>
       <a href="#kpi" data-nav="kpi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>KPI 4b</a>
       <a href="#tugas" data-nav="tugas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Daftar tugas<span class="cnt" id="navLate" hidden></span></a>
+      <button type="button" class="nav-more" id="navMore" aria-expanded="false" aria-controls="navSheet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Lainnya<span class="cnt" id="navMoreCnt" hidden></span></button>
     </nav>
     <div class="side-foot">
       <span id="sideData">Memuat data…</span>
@@ -44,37 +45,47 @@
 
     <!-- RINGKASAN -->
     <section class="view" id="v-ringkasan" aria-labelledby="viewTitle">
-      <div class="card hero">
-        <div><div class="lbl">CR terlambat</div><div class="big" id="heroNum">–</div></div>
-        <p id="heroText">Memuat…</p>
+      <div class="top-row">
+        <div class="card focus">
+          <div class="card-h"><h2>Fokus hari ini</h2><span class="sub" id="focusSub"></span><a href="#tugas">Semua tugas →</a></div>
+          <div class="focus-list" id="focusList" role="list"></div>
+        </div>
+        <a class="card hero" href="#cr">
+          <div class="lbl">CR terlambat</div>
+          <div class="big" id="heroNum">–</div>
+          <p id="heroText">Memuat…</p>
+          <ul class="hero-list" id="heroList"></ul>
+          <span class="hero-go">Monitoring CR →</span>
+        </a>
       </div>
       <div class="kpis">
-        <div class="card kpi-t"><div class="l">Progres tugas minggu ini</div><div class="v" id="kWeek">–</div><div class="meter" aria-hidden="true"><b id="kWeekBar"></b></div><div class="d" id="kWeekSub">—</div></div>
+        <div class="card kpi-t"><div class="l">Progres tugas minggu ini</div><div class="v" id="kWeek">–</div><div class="meter" aria-hidden="true"><b id="kWeekBar"></b></div><div class="d" id="kWeekSub">—</div><div class="dl" id="kWeekDl" hidden></div></div>
         <div class="card kpi-t"><div class="l">Tugas lewat tenggat</div><div class="v" id="kLate">–</div><div class="d" id="kLateSub">—</div></div>
-        <div class="card kpi-t"><div class="l">Indeks kemajuan CoC minggu ini</div><div class="v" id="kCoc">–</div><div class="d" id="kCocSub">—</div></div>
+        <div class="card kpi-t"><div class="l">Indeks kemajuan CoC minggu ini</div><div class="v" id="kCoc">–</div><div class="d" id="kCocSub">—</div><div class="dl" id="kCocDl" hidden></div></div>
         <div class="card kpi-t"><div class="l" id="kKpiL">KPI 4b bulan ini</div><div class="v" id="kKpi">–</div><div class="d" id="kKpiSub">—</div></div>
       </div>
-      <div class="grid-2-1">
-        <div class="card">
-          <div class="card-h"><h2>Progres CR aplikasi</h2><span class="sub">% progres, urut menurut status jadwal</span><a href="#cr">Rincian CR →</a></div>
-          <div class="hbars" id="crChart" role="list"></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks" id="crAxis"></div><span></span><span></span></div>
-        </div>
-        <div class="card">
-          <div class="card-h"><h2>Agenda 14 hari</h2><span class="sub">milestone CR &amp; tenggat tugas</span></div>
-          <div class="agenda" id="agenda"></div>
-        </div>
+      <div class="card">
+        <div class="card-h"><h2>Progres CR aplikasi</h2><span class="sub">% progres dan milestone berikut, urut menurut status jadwal</span><a href="#cr">Rincian CR →</a></div>
+        <div class="hb hb-head" aria-hidden="true"><span>CR</span><span>Progres</span><span></span><span>Milestone berikut</span><span>Status jadwal</span></div>
+        <div class="hbars" id="crChart" role="list"></div>
+        <div class="axis" aria-hidden="true"><span></span><div class="ticks" id="crAxis"></div><span></span><span></span><span></span></div>
       </div>
-      <div class="grid-1-1">
+      <div class="grid-3">
         <div class="card">
-          <div class="card-h"><h2>Status komitmen CoC per bidang</h2><a href="#coc">Rincian CoC →</a></div>
+          <div class="card-h"><h2>Komitmen CoC per bidang</h2><a href="#coc">Rincian →</a></div>
           <div class="lgd" id="cocLegend"></div>
           <div class="comp" id="cocChart"></div>
         </div>
         <div class="card">
-          <div class="card-h"><h2>CR Reengineering di laporan KPI 4b</h2><span class="sub">item Done per laporan bulanan</span><a href="#kpi">Rincian KPI →</a></div>
+          <div class="card-h"><h2>Reengineering di KPI 4b</h2><a href="#kpi">Rincian →</a></div>
+          <p class="sub card-sub">item Done per laporan bulanan</p>
           <div class="cols" id="kpiChart"></div>
           <p class="table-note" id="kpiNote"></p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Agenda 14 hari</h2><a href="#kalender">Kalender →</a></div>
+          <p class="sub card-sub">milestone CR, rapat &amp; tenggat tugas</p>
+          <div class="agenda" id="agenda"></div>
         </div>
       </div>
     </section>
@@ -82,14 +93,26 @@
     <!-- KALENDER -->
     <section class="view" id="v-kalender" hidden>
       <div class="card">
-        <div class="card-h"><h2>Agenda 14 hari dari Google Calendar</h2><a href="https://calendar.google.com/calendar/r/week" target="_blank" rel="noopener noreferrer">Buka Google Calendar →</a></div>
-        <p class="sub kal-src" id="kalSrc">—</p>
-        <div class="kal" id="kalList"></div>
+        <div class="sec-head">
+          <h2>Agenda dari Google Calendar</h2>
+          <div class="weeknav">
+            <div class="segm" role="group" aria-label="Tampilan kalender">
+              <button type="button" data-km="week" aria-pressed="true">Minggu</button><button type="button" data-km="list" aria-pressed="false">Daftar</button>
+            </div>
+            <button class="btn" type="button" id="kPrev" aria-label="Minggu sebelumnya">‹</button>
+            <span class="lbl" id="kWeekLbl">—</span>
+            <button class="btn" type="button" id="kNext" aria-label="Minggu berikutnya">›</button>
+            <button class="btn" type="button" id="kThis">Minggu ini</button>
+          </div>
+        </div>
+        <p class="sub kal-src"><span id="kalSrc">—</span> · <a href="https://calendar.google.com/calendar/r/week" target="_blank" rel="noopener noreferrer">Buka Google Calendar ↗</a></p>
+        <div class="klg" aria-hidden="true"><span class="k-rapat">Rapat</span><span class="k-tenggat">Tenggat</span><span class="k-milestone">Milestone CR</span><span class="k-rutin">Rutin</span></div>
+        <div id="kalList"></div>
       </div>
       <div class="card">
         <div class="card-h"><h2>Tugas yang belum ada di kalender</h2><span class="sub" id="kalMissN"></span></div>
-        <p class="sub">Tombol <b>+ Google Calendar</b> membuka Google Calendar dengan judul dan tanggal sudah terisi; Anda tinggal klik <b>Simpan</b>.</p>
-        <div class="kal" id="kalMiss"></div>
+        <p class="sub card-sub"><b>+ Kalender</b> membuka Google Calendar dengan judul dan tanggal sudah terisi; Anda tinggal klik <b>Simpan</b>.</p>
+        <div class="miss" id="kalMiss"></div>
       </div>
     </section>
 
@@ -150,12 +173,13 @@
           </table>
         </div>
         <div class="legend">
-          <span class="lg-none">Belum dibuat</span><span class="lg-todo">Belum</span><span class="lg-doing">Proses</span><span class="lg-done">Selesai</span><span class="lg-late">Terlambat</span>
+          <span class="lg-plan">Terjadwal</span><span class="lg-today">Hari ini, belum</span><span class="lg-doing">Proses</span><span class="lg-done">Selesai</span><span class="lg-late">Terlambat</span><span class="lg-none">Belum dibuat</span>
         </div>
       </div>
       <div class="card">
         <div class="card-h"><h2>Progres 4 minggu terakhir</h2><span class="sub">rata-rata progres tugas bertenggat di minggu itu</span></div>
         <div class="trend" id="trend"></div>
+        <p class="table-note" id="trendNote" hidden></p>
       </div>
     </section>
 
