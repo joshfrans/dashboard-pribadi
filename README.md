@@ -27,7 +27,9 @@ Dashboard pribadi Officer Strategi & Evaluasi DIV GA, di-host di GitHub Pages. D
 | `tools/validasi-data.mjs` | Cek struktur JSON polos sebelum enkripsi, atau cek amplop terenkripsi |
 | `tools/kalender_gcal.py` | Acara Google Calendar (list_events) → blok `kalender` di data |
 | `data/eviden.enc.json` | Indeks eviden terenkripsi (daftar file, jenis, tanggal, tugas terkait) |
-| `eviden/YYYY/MM/*.bin` | File eviden terenkripsi (format `DSE1` + salt + iv + AES-256-GCM) |
+| `data/status.enc.json` | Status tugas dari tombol **✓ Selesai** / **Mulai** di dashboard (terenkripsi) |
+| `eviden/YYYY/MM/*.bin` | File eviden terenkripsi (`DSE2` + iv + AES-256-GCM dengan kunci eviden; file lama `DSE1` memakai kata sandi) |
+| `tools/sinkron-dashboard.mjs` | Ambil eviden & status dari repo, dekripsi dengan kunci eviden, untuk disalin ke tracker |
 | `tools/enkripsi-data.mjs` | JSON polos → `tracker.enc.json` (dan `--buka` untuk uji dekripsi) |
 | `.github/workflows/validasi.yml` | Cek otomatis: data tetap terenkripsi, tidak ada file polos/aset eksternal |
 
@@ -52,7 +54,14 @@ CR yang punya field `rencana` (daftar rentang `mulai`–`selesai` per sub-task, 
 3. Pilih jenis eviden, tanggal, keterangan, file → **Unggah eviden**. File dienkripsi di browser lalu disimpan ke `eviden/`; indeks `data/eviden.enc.json` diperbarui; tugas terkait (MoM/Rekap CoC, MoM weekly CR, KPI 4b) otomatis ditandai selesai.
 4. Nama file asli, jenis dan keterangan hanya ada di indeks terenkripsi. Di repo publik yang terlihat hanya nama acak seperti `eviden/2026/10/20261007-xxxx.bin`.
 
-Agar eviden juga masuk tracker claude.ai dan dievaluasi otomatis, minta Claude: **"sinkronkan eviden dashboard"**.
+Eviden MoM/Rekap CoC tampil di menu **Eviden CoC** pada tanggalnya, dengan tombol **⤓ MoM / ⤓ Rekap** untuk mengunduh file asli. Eviden lama dan hasil evaluasi yang ada di tracker diberi tautan **↗** ke tracker.
+
+## Tombol aksi & sinkron otomatis
+
+- Setiap tugas yang belum selesai punya tombol **✓ Selesai** (di Fokus hari ini dan Daftar tugas) dan **Mulai** (Daftar tugas). Status disimpan terenkripsi di `data/status.enc.json`; muncul notifikasi dengan tombol **Batalkan**.
+- Status dari dashboard hanya bisa *menaikkan* status tracker (belum → proses → selesai), tidak pernah menurunkan.
+- Tugas terjadwal **Sinkron Dashboard → Tracker** (hari kerja 06.31, 12.31, 17.31 WIB) menjalankan `tools/sinkron-dashboard.mjs`: eviden baru disalin ke tracker (MoM/Rekap CoC dikonversi ke PDF dan masuk koleksi `coc`, lalu dievaluasi otomatis 17.55) dan status tugas disalin ke koleksi `tasks`.
+- Kunci eviden (32 byte acak) disimpan di database tracker privat (`sistem/kunci-eviden`) dan di dalam `tracker.enc.json` yang terenkripsi kata sandi. Kunci ini **tidak** pernah ada di repo dalam bentuk terbuka. Jika diganti, file `DSE2` lama perlu dienkripsi ulang.
 
 ## Google Calendar
 
