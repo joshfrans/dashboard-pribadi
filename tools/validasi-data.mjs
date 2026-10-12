@@ -13,10 +13,13 @@ catch (e) { console.error(`GALAT: ${path} bukan JSON valid — ${e.message}`); p
 // Amplop terenkripsi: cek bentuknya saja (isi hanya bisa dibaca dengan kata sandi).
 if (data && data.format) {
   const e = [];
-  if (data.format !== "dse-aesgcm-v1") e.push("format amplop tidak dikenal");
-  if (data.kdf?.name !== "PBKDF2" || data.kdf?.hash !== "SHA-256" || !(data.kdf?.iter >= 300000)) e.push("KDF harus PBKDF2-SHA256 ≥ 300.000 iterasi");
+  // dse-aesgcm-v1: kunci dari kata sandi (PBKDF2). dse-k2-v1: kunci eviden acak 32 byte (indeks eviden & status tugas).
+  const k2 = data.format === "dse-k2-v1";
+  if (!["dse-aesgcm-v1", "dse-k2-v1"].includes(data.format)) e.push("format amplop tidak dikenal");
+  if (k2 && /tracker\.enc\.json$/.test(path)) e.push("tracker.enc.json harus memakai kata sandi (dse-aesgcm-v1)");
+  if (!k2 && (data.kdf?.name !== "PBKDF2" || data.kdf?.hash !== "SHA-256" || !(data.kdf?.iter >= 300000))) e.push("KDF harus PBKDF2-SHA256 ≥ 300.000 iterasi");
   const b = s => typeof s === "string" && /^[A-Za-z0-9+/]+=*$/.test(s);
-  if (!b(data.kdf?.salt) || Buffer.from(data.kdf.salt, "base64").length < 16) e.push("salt harus ≥ 16 byte");
+  if (!k2 && (!b(data.kdf?.salt) || Buffer.from(data.kdf.salt, "base64").length < 16)) e.push("salt harus ≥ 16 byte");
   if (!b(data.iv) || Buffer.from(data.iv, "base64").length !== 12) e.push("iv harus 12 byte");
   if (!b(data.ct) || Buffer.from(data.ct, "base64").length < 17) e.push("ciphertext kosong/rusak");
   const extra = Object.keys(data).filter(k => !["format", "kdf", "cipher", "iv", "ct"].includes(k));
@@ -33,6 +36,11 @@ if (isObj(data.meta)) {
   if (data.meta.skema !== 1) errors.push("meta.skema harus 1");
   if (!["publik", "lengkap"].includes(data.meta.profil)) errors.push("meta.profil harus publik atau lengkap");
   if (isNaN(Date.parse(data.meta.diekspor))) errors.push("meta.diekspor bukan waktu ISO");
+  if ("kunciEviden" in data.meta) {
+    if (data.meta.profil !== "lengkap") errors.push("meta.kunciEviden hanya boleh di profil lengkap (terenkripsi)");
+    if (!/^[A-Za-z0-9+/]{43}=$/.test(data.meta.kunciEviden || "")) errors.push("meta.kunciEviden harus 32 byte base64");
+  }
+  if ("tracker" in data.meta && !/^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9-]+$/.test(data.meta.tracker || "")) errors.push("meta.tracker harus tautan artifact claude.ai");
 }
 for (const [id, t] of Object.entries(data.tasks || {})) {
   if (!t.title) errors.push(`tasks/${id}: title kosong`);
@@ -82,7 +90,7 @@ for (const [re, nama] of leaks) { const m = text.match(re); if (m) errors.push(`
 
 // Profil publik: tidak boleh memuat isi komitmen/catatan/rekomendasi/isu.
 if (data.meta?.profil === "publik") {
-  for (const [id, c] of Object.entries(data.coc || {})) for (const f of ["komitmen", "catatan", "tindakLanjut", "rapat"]) if (f in c) errors.push(`coc/${id}: field "${f}" tidak boleh ada di profil publik`);
+  for (const [id, c] of Object.entries(data.coc || {})) for (const f of ["komitmen", "catatan", "tindakLanjut", "rapat", "files"]) if (f in c) errors.push(`coc/${id}: field "${f}" tidak boleh ada di profil publik`);
   for (const [id, c] of Object.entries(data.coc || {})) if (c.evaluasi?.rekomendasi) errors.push(`coc/${id}: rekomendasi tidak boleh ada di profil publik`);
   for (const [id, c] of Object.entries(data.cr || {})) for (const f of ["isu", "sumber"]) if (f in c) errors.push(`cr/${id}: field "${f}" tidak boleh ada di profil publik`);
   for (const [id, k] of Object.entries(data.kpi || {})) if ("catatan" in k) errors.push(`kpi/${id}: catatan tidak boleh ada di profil publik`);
