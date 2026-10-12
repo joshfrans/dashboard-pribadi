@@ -94,6 +94,7 @@
     else if (grp === "today") side.appendChild(el("span", "chip s-due", "Belum"));
     var jk = jenisForTask(t.id);
     if (jk && !done && grp === "today") { var b = el("button", "btn sm", "Unggah eviden"); b.type = "button"; b.addEventListener("click", function () { openUpload(jk, t.due); }); side.appendChild(b); }
+    actBtns(t, side, true);
     r.appendChild(side);
     return r;
   }
@@ -487,10 +488,11 @@
     var grid = $("#evGrid"); clear(grid);
     $("#evWeek").textContent = fmt(weekStart, { day: "numeric", month: "short" }) + " – " + fmt(addD(weekStart, 3), { day: "numeric", month: "short", year: "numeric" });
     for (var i = 0; i < 4; i++) {
-      var d = addD(weekStart, i), c = D.coc[d];
-      var card = el("div", "ev" + (c ? " has" : " empty-ev") + (c && evSel === d ? " sel" : ""));
+      var d = addD(weekStart, i), c = D.coc[d], ups = cocUps(d);
+      var card = el("div", "ev" + (c || ups.length ? " has" : " empty-ev") + (c && evSel === d ? " sel" : ""));
       card.appendChild(el("div", "day" + (d === TODAY ? " today" : ""), DAYS[i] + " · " + fmt(d, { day: "numeric", month: "short" })));
-      if (c) cardBody(card, c, d);
+      if (c) cardBody(card, c, d, ups);
+      else if (ups.length) upCard(card, ups);
       else {
         card.appendChild(el("h3", null, "Belum ada eviden"));
         card.appendChild(el("p", "muted", d > TODAY ? "Jadwal CoC mendatang." : "MoM dan rekap belum masuk tracker."));
@@ -499,26 +501,57 @@
     }
     renderDetail();
   }
-  function cardBody(card, c, d) {
+  var KIND = { mom: "MoM", rekap: "Rekap" };
+  function cocUps(d) { return (D.evidenList || []).filter(function (x) { return x.tanggal === d && KIND[x.jenis]; }); }
+  function trackerLink(label, title) {
+    var u = D.meta && D.meta.tracker;
+    if (!u) return el("span", "ev-tag ok", label + " ✓");
+    var a = el("a", "ev-tag ok lnk", label + " ↗"); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer";
+    a.title = (title ? title + " · " : "") + "buka di tracker"; a.setAttribute("aria-label", label + (title ? " (" + title + ")" : "") + ", buka di tracker");
+    return a;
+  }
+  function dlBtn(x) {
+    var b = el("button", "ev-dl", "⤓ " + (KIND[x.jenis] || jenisOf(x.jenis).label)); b.type = "button";
+    b.title = x.nama + " · " + kbStr(x.ukuran || 0); b.setAttribute("aria-label", "Unduh " + x.nama);
+    b.addEventListener("click", function () { openEviden(x, true); });
+    return b;
+  }
+  function fileRow(card, c, ups) {
+    var fl = el("div", "files"), used = {};
+    var tf = c && c.files && c.files.length ? c.files : ((c && c.eviden) || []).map(function (k) { return { kind: k }; });
+    tf.forEach(function (f) {
+      var up = ups.filter(function (x) { return KIND[x.jenis] === f.kind && !used[x.id]; })[0];
+      if (up) { used[up.id] = 1; fl.appendChild(dlBtn(up)); } else fl.appendChild(trackerLink(f.kind, f.name));
+    });
+    ups.forEach(function (x) { if (!used[x.id]) fl.appendChild(dlBtn(x)); });
+    if (c && c.evaluasi && c.evaluasi.status === "Selesai") fl.appendChild(trackerLink("Rekap evaluasi" + (c.evaluasi.slideRekap ? " " + c.evaluasi.slideRekap + " slide" : ""), c.evaluasi.deck));
+    if (!fl.childNodes.length) fl.appendChild(el("span", "muted", "Belum ada file"));
+    card.appendChild(fl);
+  }
+  function upCard(card, ups) {
+    card.appendChild(el("h3", null, ups[0].ket || "CoC"));
+    card.appendChild(el("p", "muted", "Eviden masuk dari dashboard. Disalin ke tracker oleh sinkron otomatis, lalu dievaluasi pukul 17.55."));
+    fileRow(card, null, ups);
+    card.appendChild(el("div", "ev-wait", "Menunggu evaluasi otomatis"));
+  }
+  function cardBody(card, c, d, ups) {
     card.appendChild(el("h3", null, c.bidang || "CoC"));
     var ix = c.indeks || {}, m = c.status || {}, tot = c.jumlahKomitmen || 0;
-    var idx = el("div", "idx"); idx.appendChild(el("b", "num", ix.persen == null ? "–" : ix.persen + "%"));
-    idx.appendChild(el("span", null, "indeks kemajuan · " + (ix.maju || 0) + " ÷ " + (ix.lama || 0) + " komitmen lama")); card.appendChild(idx);
-    var st = el("div", "stack"); st.setAttribute("aria-hidden", "true");
-    ST.forEach(function (s) { if (m[s.k] && tot) { var b = el("i"); b.style.width = (m[s.k] / tot * 100) + "%"; stMark(b, s); b.title = s.k + ": " + m[s.k]; st.appendChild(b); } });
-    card.appendChild(st);
-    var cn = el("div", "counts");
-    ST.forEach(function (s) { if (m[s.k]) { var sp = el("span", null, s.k + " " + m[s.k]); stMark(sp, s); cn.appendChild(sp); } });
-    card.appendChild(cn);
-    var fl = el("div", "files");
-    (c.eviden || []).forEach(function (k) { fl.appendChild(el("span", "ev-tag ok", k + " ✓")); });
-    if (c.evaluasi && c.evaluasi.status === "Selesai") fl.appendChild(el("span", "ev-tag ok", "Evaluasi " + (c.evaluasi.slide || "") + " slide ✓"));
-    if (c.evaluasi && c.evaluasi.slideRekap) fl.appendChild(el("span", "ev-tag ok", "Rekap " + c.evaluasi.slideRekap + " slide ✓"));
-    if (!(c.eviden || []).length) fl.appendChild(el("span", "muted", "Belum ada file"));
-    card.appendChild(fl);
+    if (tot) {
+      var idx = el("div", "idx"); idx.appendChild(el("b", "num", ix.persen == null ? "–" : ix.persen + "%"));
+      idx.appendChild(el("span", null, "indeks kemajuan · " + (ix.maju || 0) + " ÷ " + (ix.lama || 0) + " komitmen lama")); card.appendChild(idx);
+      var st = el("div", "stack"); st.setAttribute("aria-hidden", "true");
+      ST.forEach(function (s) { if (m[s.k]) { var b = el("i"); b.style.width = (m[s.k] / tot * 100) + "%"; stMark(b, s); b.title = s.k + ": " + m[s.k]; st.appendChild(b); } });
+      card.appendChild(st);
+      var cn = el("div", "counts");
+      ST.forEach(function (s) { if (m[s.k]) { var sp = el("span", null, s.k + " " + m[s.k]); stMark(sp, s); cn.appendChild(sp); } });
+      card.appendChild(cn);
+    }
+    fileRow(card, c, ups || []);
     if (c.evaluasi && c.evaluasi.ringkas) card.appendChild(el("div", "ev-rec", c.evaluasi.ringkas));
-    else if ((c.eviden || []).length && !c.evaluasi) card.appendChild(el("div", "ev-wait", "Menunggu evaluasi otomatis"));
+    else if (((c.eviden || []).length || (ups || []).length) && !(c.evaluasi && c.evaluasi.status === "Selesai")) card.appendChild(el("div", "ev-wait", "Menunggu evaluasi otomatis"));
     if (c.jumlahCatatan) card.appendChild(el("div", "flag", c.jumlahCatatan + " catatan evaluasi"));
+    if (!tot) return;
     var tg = el("button", "btn", evSel === d ? "Tutup rincian" : "Lihat rincian"); tg.type = "button"; tg.setAttribute("aria-expanded", String(evSel === d));
     tg.addEventListener("click", function () { evSel = evSel === d ? null : d; renderEvidence(); if (evSel) $("#evDetail").scrollIntoView({ behavior: "smooth", block: "nearest" }); });
     card.appendChild(tg);
@@ -624,8 +657,9 @@
       if (isLate(t)) meta.appendChild(el("span", "pill late", "Terlambat"));
       meta.appendChild(el("span", "mono", "Tenggat " + shortD(t.due) + (t.time ? " " + t.time : "")));
       main.appendChild(meta);
-      var side = el("div", "seg-ro"), bar = el("span", "bar"), f = el("b"); f.style.width = prog(t) + "%"; bar.appendChild(f);
-      side.appendChild(bar); side.appendChild(document.createTextNode(t.status === "done" ? (t.viaEviden ? "Selesai · eviden" : "Selesai") : prog(t) + "%"));
+      var side = el("div", "tside2"), sr = el("span", "seg-ro"), bar = el("span", "bar"), f = el("b"); f.style.width = prog(t) + "%"; bar.appendChild(f);
+      sr.appendChild(bar); sr.appendChild(document.createTextNode(t.status === "done" ? (t.viaEviden ? "Selesai · eviden" : t.viaAksi ? "Selesai · dashboard" : "Selesai") : prog(t) + "%")); side.appendChild(sr);
+      actBtns(t, side, !!jenisForTask(t.id));
       if (t.status !== "done" && t.due >= TODAY && !onCalendar(t)) { var gl = el("a", "gcal", "+ Kalender"); gl.href = gcalLink(t); gl.target = "_blank"; gl.rel = "noopener noreferrer"; gl.setAttribute("aria-label", "Tambah ke Google Calendar: " + t.title); main.appendChild(gl); }
       row.appendChild(dot); row.appendChild(main); row.appendChild(side); box.appendChild(row);
     });
@@ -642,7 +676,7 @@
     if (jam <= 26) { setFresh("ok", "✓ Segar · data per " + label); banner.hidden = true; }
     else if (jam <= 96) { setFresh("warn", "▲ Tertunda · data per " + label); banner.hidden = false; banner.className = "banner"; banner.textContent = "Data belum diperbarui lebih dari sehari. Minta Claude memperbarui data/tracker.enc.json."; }
     else { setFresh("bad", "! Usang " + Math.floor(jam / 24) + " hari · data per " + label); banner.hidden = false; banner.className = "banner bad"; banner.textContent = "Data sudah lebih dari 4 hari. Angka di dashboard ini mungkin tidak lagi sesuai tracker."; }
-    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden diunggah lewat menu Eviden; status lain dikelola di tracker privat.";
+    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden dan tombol ✓ Selesai disimpan terenkripsi di repo, lalu disalin ke tracker privat oleh sinkron otomatis (06.30, 12.30, 17.30 WIB).";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
   function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); }
@@ -670,7 +704,7 @@
     }).then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
   }
   function lock(msg) {
-    sandi = null; keyCache = {}; D = { meta: {}, tasks: {}, cr: {}, coc: {}, kpi: {} }; loaded = false; BASE = null; TOKEN = null; ghInfo = null; EV = { skema: 1, eviden: [] };
+    sandi = null; keyCache = {}; D = { meta: {}, tasks: {}, cr: {}, coc: {}, kpi: {} }; loaded = false; BASE = null; TOKEN = null; ghInfo = null; EV = { skema: 1, eviden: [] }; ACT = { skema: 1, status: {} };
     document.body.classList.add("locked"); $("#lock").hidden = false;
     var er = $("#lockErr"); er.hidden = !msg; er.textContent = msg || "";
     setTimeout(function () { $("#lockPw").focus(); }, 0);
@@ -679,7 +713,7 @@
     if (!valid(x)) throw new Error("format");
     BASE = x; loaded = true; document.body.classList.remove("locked"); $("#lock").hidden = true;
     rebuild();
-    tokenLoad().then(function () { renderEvidenView(); return evLoad(); });
+    tokenLoad().then(function () { renderEvidenView(); return Promise.all([evLoad(), actLoad()]); });
   }
   $("#lockForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -718,6 +752,34 @@
   function kbStr(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
   function nowIso() { return new Date().toISOString().replace(/\.\d+Z$/, "Z"); }
 
+  // --- kunci eviden (K2): 32 byte acak di data terenkripsi; juga dipakai sinkron otomatis ke tracker ---
+  var k2Raw = null, k2Key = null;
+  function k2() {
+    var raw = BASE && BASE.meta && BASE.meta.kunciEviden;
+    if (!raw) return null;
+    if (raw !== k2Raw) { k2Raw = raw; k2Key = crypto.subtle.importKey("raw", unb64(raw), "AES-GCM", false, ["encrypt", "decrypt"]); }
+    return k2Key;
+  }
+  function encAnyJSON(obj) {
+    if (!k2()) return encryptJSON(sandi, obj);
+    var iv = crypto.getRandomValues(new Uint8Array(12)), format = "dse-k2-v1";
+    return k2().then(function (k) { return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv, additionalData: te.encode(format) }, k, te.encode(JSON.stringify(obj))); })
+      .then(function (ct) { return { format: format, cipher: "AES-256-GCM", iv: b64(iv), ct: b64(new Uint8Array(ct)) }; });
+  }
+  function decAnyJSON(e) {
+    if (!e || e.format !== "dse-k2-v1") return decrypt(sandi, e);
+    if (!k2()) return Promise.reject(new Error("kunci"));
+    return k2().then(function (k) { return crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(e.iv), additionalData: te.encode(e.format) }, k, unb64(e.ct)); })
+      .then(function (b) { return JSON.parse(new TextDecoder().decode(b)); });
+  }
+  // berkas DSE2: "DSE2" + iv(12) + ciphertext, AAD "dse-file-v2", kunci K2
+  function encFile(bytes) {
+    if (!k2()) return encryptFile(sandi, bytes);
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    return k2().then(function (k) { return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv, additionalData: te.encode("dse-file-v2") }, k, bytes); })
+      .then(function (ct) { var c = new Uint8Array(ct), out = new Uint8Array(16 + c.length); out.set(te.encode("DSE2"), 0); out.set(iv, 4); out.set(c, 16); return out; });
+  }
+
   // --- kunci dari kata sandi (salt baru per berkas) ---
   function keyFrom(pw, salt, iter, usages) {
     return crypto.subtle.importKey("raw", te.encode(pw.normalize("NFC")), "PBKDF2", false, ["deriveKey"]).then(function (base) {
@@ -738,8 +800,9 @@
     }).then(function (ct) { var c = new Uint8Array(ct), out = new Uint8Array(32 + c.length); out.set(te.encode("DSE1"), 0); out.set(salt, 4); out.set(iv, 20); out.set(c, 32); return out; });
   }
   function decryptFile(pw, buf) {
-    var u = new Uint8Array(buf);
-    if (new TextDecoder().decode(u.subarray(0, 4)) !== "DSE1") return Promise.reject(new Error("format"));
+    var u = new Uint8Array(buf), hd = new TextDecoder().decode(u.subarray(0, 4));
+    if (hd === "DSE2") { if (!k2()) return Promise.reject(new Error("kunci")); return k2().then(function (k) { return crypto.subtle.decrypt({ name: "AES-GCM", iv: u.slice(4, 16), additionalData: te.encode("dse-file-v2") }, k, u.subarray(16)); }); }
+    if (hd !== "DSE1") return Promise.reject(new Error("format"));
     return keyFrom(pw, u.slice(4, 20), 600000, ["decrypt"]).then(function (k) {
       return crypto.subtle.decrypt({ name: "AES-GCM", iv: u.slice(20, 32), additionalData: te.encode("dse-file-v1") }, k, u.subarray(32));
     });
@@ -783,7 +846,7 @@
   }
 
   // --- indeks eviden: data/eviden.enc.json (terenkripsi) ---
-  function evFromEnvelope(e) { return decrypt(sandi, e).then(function (o) { if (!o || !Array.isArray(o.eviden)) throw new Error("format"); return o; }); }
+  function evFromEnvelope(e) { return decAnyJSON(e).then(function (o) { if (!o || !Array.isArray(o.eviden)) throw new Error("format"); return o; }); }
   function evLoad() {
     // sumber cepat: GitHub Pages (situs sendiri); jika token ada, API (lebih segar setelah unggah)
     var p = TOKEN ? ghGet(EVIDEN_PATH).then(function (j) { return j ? JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, "")))) : null; })
@@ -800,6 +863,7 @@
       if (t && t.status !== "done") { t.status = "done"; t.progress = 100; t.doneAt = x.diunggah; t.viaEviden = true; }
       if (x.jenis === "kpi4b") { var k = d.kpi[x.tanggal.slice(0, 7)]; if (k) k.adaLaporan = true; }
     });
+    applyAct(d);
     D = d; renderAll(); if (loaded) freshness();
   }
 
@@ -819,7 +883,7 @@
     var tugas = taskIdFor(jenis, tanggal);
     if (tugas && !(BASE.tasks || {})[tugas]) tugas = null;
     uploading = true; $("#upBtn").disabled = true; setUpMsg("", "Mengenkripsi file…");
-    f.arrayBuffer().then(function (buf) { return encryptFile(sandi, buf); }).then(function (bin) {
+    f.arrayBuffer().then(function (buf) { return encFile(buf); }).then(function (bin) {
       setUpMsg("", "Mengunggah ke GitHub (" + kbStr(bin.length) + ")…");
       return ghPut(path, b64(bin), "Tambah eviden terenkripsi " + id);
     }).then(function () {
@@ -834,20 +898,86 @@
   function saveIndex(mutate, attempt) {
     return ghGet(EVIDEN_PATH).then(function (j) {
       var p = j ? evFromEnvelope(JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, ""))))) : Promise.resolve({ skema: 1, eviden: [] });
-      return p.then(function (o) { var next = mutate(o); next.diperbarui = nowIso(); return encryptJSON(sandi, next).then(function (e) {
+      return p.then(function (o) { var next = mutate(o); next.diperbarui = nowIso(); return encAnyJSON(next).then(function (e) {
         return ghPut(EVIDEN_PATH, b64(te.encode(JSON.stringify(e) + "\n")), "Perbarui indeks eviden terenkripsi", j && j.sha).then(function () { EV = next; rebuild(); });
       }); });
     }).catch(function (e) { if ((e.status === 409 || e.status === 422) && attempt < 2) return saveIndex(mutate, attempt + 1); throw e; });
   }
   function openEviden(x, download) {
     var btnMsg = $("#evListMsg"); btnMsg.hidden = false; btnMsg.className = "up-msg"; btnMsg.textContent = "Membuka " + x.nama + "…";
+    toast((download ? "Mengunduh " : "Membuka ") + x.nama + "…", "");
     var src = TOKEN ? gh("GET", "/contents/" + x.path + "?ref=main", null, "application/vnd.github.raw") : fetch(x.path, { cache: "no-cache" });
     src.then(function (r) { if (!r.ok) throw ghErr(r); return r.arrayBuffer(); }).then(function (buf) { return decryptFile(sandi, buf); }).then(function (plain) {
       var url = URL.createObjectURL(new Blob([plain], { type: x.tipe || "application/octet-stream" }));
       var a = document.createElement("a"); a.href = url; if (download || !/pdf|image/.test(x.tipe || "")) a.download = x.nama; else a.target = "_blank";
       a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-      btnMsg.hidden = true;
-    }).catch(function (e) { btnMsg.className = "up-msg bad"; btnMsg.textContent = e && e.status === 404 ? "! File belum tersedia di situs. Tunggu 1–2 menit setelah unggah, atau hubungkan GitHub." : "! File tidak bisa dibuka: " + ghMsg(e); });
+      btnMsg.hidden = true; toast("✓ " + x.nama + (download ? " diunduh." : " dibuka."), "ok");
+    }).catch(function (e) { btnMsg.className = "up-msg bad"; btnMsg.textContent = e && e.status === 404 ? "! File belum tersedia di situs. Tunggu 1–2 menit setelah unggah, atau hubungkan GitHub." : "! File tidak bisa dibuka: " + (e && e.status ? ghMsg(e) : "kunci atau format file tidak cocok."); toast(btnMsg.textContent, "bad"); });
+  }
+
+  // --- status tugas dari tombol aksi: data/status.enc.json (terenkripsi), disalin ke tracker oleh sinkron otomatis ---
+  var STATUS_PATH = "data/status.enc.json", ACT = { skema: 1, status: {} }, actTag = null, RANK = { todo: 0, doing: 1, done: 2 }, saving = {};
+  function actLoad() {
+    var p = TOKEN ? ghGet(STATUS_PATH).then(function (j) { return j ? JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, "")))) : null; })
+                  : fetch(STATUS_PATH, { cache: "no-cache" }).then(function (r) { actTag = r.headers.get("ETag") || r.headers.get("Last-Modified"); return r.ok ? r.json() : null; });
+    return p.then(function (e) { return e ? decAnyJSON(e) : null; }).then(function (o) { if (o && o.status) { ACT = o; rebuild(); } }).catch(function () { /* belum ada atau tidak terbaca */ });
+  }
+  function saveStatus(mutate, attempt) {
+    return ghGet(STATUS_PATH).then(function (j) {
+      var p = j ? decAnyJSON(JSON.parse(new TextDecoder().decode(unb64(j.content.replace(/\n/g, ""))))) : Promise.resolve({ skema: 1, status: {} });
+      return p.then(function (o) { o.status = o.status || {}; var next = mutate(o); next.diperbarui = nowIso(); return encAnyJSON(next).then(function (e) {
+        return ghPut(STATUS_PATH, b64(te.encode(JSON.stringify(e) + "\n")), "Perbarui status tugas terenkripsi", j && j.sha).then(function () { ACT = next; rebuild(); });
+      }); });
+    }).catch(function (e) { if ((e.status === 409 || e.status === 422) && attempt < 2) return saveStatus(mutate, attempt + 1); throw e; });
+  }
+  // status dari dashboard hanya boleh MENAIKKAN status tracker (todo → doing → done), tidak pernah menurunkan
+  function applyAct(d) {
+    Object.keys(ACT.status || {}).forEach(function (id) {
+      var a = ACT.status[id], t = d.tasks[id];
+      if (!t || !a || (RANK[a.status] || 0) <= (RANK[t.status] || 0)) return;
+      t.status = a.status; t.progress = a.status === "done" ? 100 : Math.max(+t.progress || 0, +a.progress || 0);
+      if (a.status === "done") t.doneAt = a.doneAt || a.at;
+      t.viaAksi = true;
+    });
+  }
+  var toastEl = null, toastT = null;
+  function toast(msg, cls, act) {
+    if (!toastEl) { toastEl = el("div", "toast"); toastEl.setAttribute("role", "status"); toastEl.setAttribute("aria-live", "polite"); document.body.appendChild(toastEl); }
+    clear(toastEl); toastEl.className = "toast on " + (cls || "");
+    toastEl.appendChild(el("span", null, msg));
+    function hide() { toastEl.className = "toast"; }
+    if (act) { var b = el("button", "tbtn", act.label); b.type = "button"; b.addEventListener("click", function () { hide(); act.fn(); }); toastEl.appendChild(b); }
+    clearTimeout(toastT); toastT = setTimeout(hide, act ? 8000 : 4500);
+  }
+  function shortT(s) { s = s || ""; return s.length > 48 ? s.slice(0, 46) + "…" : s; }
+  function setTaskState(t, status) {
+    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Eviden → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
+    var id = t.id; if (saving[id]) return;
+    var prev = ACT.status[id], at = nowIso();
+    var val = status ? { status: status, at: at, doneAt: status === "done" ? at : null, progress: status === "done" ? 100 : 50 } : null;
+    saving[id] = true;
+    if (val) ACT.status[id] = val; else delete ACT.status[id];
+    rebuild();
+    toast("Menyimpan status…", "");
+    saveStatus(function (o) { if (val) o.status[id] = val; else delete o.status[id]; return o; }, 0).then(function () {
+      var undo = { label: "Batalkan", fn: function () { setTaskState(t, null); } };
+      if (status === "done") toast("✓ “" + shortT(t.title) + "” selesai" + (jenisForTask(id) && !t.viaEviden ? ". Unggah eviden bila ada." : "."), "ok", undo);
+      else if (status === "doing") toast("“" + shortT(t.title) + "” sedang dikerjakan.", "ok", undo);
+      else toast("Status “" + shortT(t.title) + "” dikembalikan.", "");
+    }).catch(function (e) {
+      if (prev) ACT.status[id] = prev; else delete ACT.status[id];
+      rebuild(); toast("! Status belum tersimpan: " + ghMsg(e), "bad");
+    }).then(function () { delete saving[id]; });
+  }
+  function actBtns(t, box, compact) {
+    if (!loaded || !t.id) return;
+    if (t.status === "done") {
+      if (t.viaAksi) { var u = el("button", "btn sm ghost", "Batalkan"); u.type = "button"; u.setAttribute("aria-label", "Batalkan status selesai: " + t.title); u.addEventListener("click", function () { setTaskState(t, null); }); box.appendChild(u); }
+      return;
+    }
+    if (t.status !== "doing" && !compact) { var s = el("button", "btn sm ghost", "Mulai"); s.type = "button"; s.setAttribute("aria-label", "Tandai sedang dikerjakan: " + t.title); s.addEventListener("click", function () { setTaskState(t, "doing"); }); box.appendChild(s); }
+    var b = el("button", "btn sm ok", "✓ Selesai"); b.type = "button"; b.setAttribute("aria-label", "Tandai selesai: " + t.title);
+    b.addEventListener("click", function () { setTaskState(t, "done"); }); box.appendChild(b);
   }
 
   // --- perbarui data dashboard (tracker.enc.json) dari file yang dikirim Claude ---
@@ -1025,7 +1155,7 @@
   $("#kThis").addEventListener("click", function () { kalWeek = monday(TODAY); renderKalender(); });
   $("#navMore").addEventListener("click", function () { var n = $(".nav"), o = !n.classList.contains("more"); n.classList.toggle("more", o); this.setAttribute("aria-expanded", String(o)); });
   document.querySelectorAll(".nav a").forEach(function (a) { a.addEventListener("click", function () { $(".nav").classList.remove("more"); $("#navMore").setAttribute("aria-expanded", "false"); }); });
-  $("#evRefresh").addEventListener("click", function () { evLoad(); });
+  $("#evRefresh").addEventListener("click", function () { evLoad(); actLoad(); });
 
   function load() {
     return fetch(DATA_URL, { cache: "no-cache" }).then(function (r) {
@@ -1051,6 +1181,7 @@
       if (tag && tag !== lastTag) load(); else if (loaded) freshness();
     }).catch(function () { /* coba lagi pada putaran berikutnya */ });
     if (loaded && !TOKEN) fetch(EVIDEN_PATH, { method: "HEAD", cache: "no-cache" }).then(function (r) { var tag = r.headers.get("ETag") || r.headers.get("Last-Modified"); if (r.ok && tag && tag !== evTag) evLoad(); }).catch(function () { });
+    if (loaded && !TOKEN) fetch(STATUS_PATH, { method: "HEAD", cache: "no-cache" }).then(function (r) { var tag = r.headers.get("ETag") || r.headers.get("Last-Modified"); if (r.ok && tag && tag !== actTag) actLoad(); }).catch(function () { });
   }
 
   // ---- interaksi ----
