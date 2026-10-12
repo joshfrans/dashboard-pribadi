@@ -3,6 +3,7 @@
 
 Pakai:
   python3 ekspor_tracker.py <folder_dump> <keluaran.json> [--profil publik|lengkap] [--kalender kalender.json]
+                            [--kunci kunci-eviden.txt] [--tracker https://claude.ai/artifact/<id>]
 
 <folder_dump> berisi subfolder tasks/, coc/, cr/, kpi/ dengan satu file JSON per dokumen
 (format keluaran ArtifactData out_dir). Profil:
@@ -26,7 +27,7 @@ def muat(folder, nama):
 
 
 def tugas(d):
-    keep = ["title", "cat", "due", "time", "prio", "status", "progress", "routine", "doneAt", "cr"]
+    keep = ["title", "cat", "due", "time", "prio", "status", "progress", "routine", "doneAt", "cr", "viaEviden"]
     return {k: d.get(k) for k in keep if k in d}
 
 
@@ -59,6 +60,9 @@ def coc(d, lengkap):
         o["evaluasi"]["slideRekap"] = ev["rekap"].get("slide")
     if lengkap:
         o["rapat"] = d.get("rapat")
+        o["files"] = [{k: f.get(k) for k in ["kind", "name", "size"]} for f in (d.get("files") or []) if f.get("kind")]
+        if ev.get("rekap", {}).get("deck"):
+            o["evaluasi"]["deck"] = ev["rekap"]["deck"]
         o["komitmen"] = [{k: r.get(k) for k in ["no", "kelompok", "lingkup", "posisi", "target", "status", "langkah"]} for r in kom]
         o["tindakLanjut"] = d.get("tindakLanjut") or []
         o["catatan"] = d.get("catatan") or []
@@ -104,6 +108,13 @@ def main():
             data["kalender"] = kal
         else:
             print("kalender dilewati: hanya untuk profil lengkap (data terenkripsi)", file=sys.stderr)
+    if "--kunci" in sys.argv or "--tracker" in sys.argv:
+        if not lengkap:
+            sys.exit("--kunci dan --tracker hanya untuk profil lengkap (data terenkripsi)")
+        if "--kunci" in sys.argv:
+            data["meta"]["kunciEviden"] = pathlib.Path(sys.argv[sys.argv.index("--kunci") + 1]).read_text(encoding="utf-8").strip()
+        if "--tracker" in sys.argv:
+            data["meta"]["tracker"] = sys.argv[sys.argv.index("--tracker") + 1]
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"OK {dst} · profil {profil} · {len(data['tasks'])} tugas, {len(data['cr'])} CR, {len(data['coc'])} CoC, {len(data['kpi'])} KPI, {len(data.get('kalender', {}).get('acara', []))} acara kalender")
