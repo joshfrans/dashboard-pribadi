@@ -34,7 +34,7 @@ jobs:
             bad=0
             while IFS= read -r -d '' f; do
               case "$f" in *.bin) ;; *) echo "File eviden bukan .bin terenkripsi: $f"; bad=1; continue;; esac
-              if [ "$(head -c 4 "$f")" != "DSE1" ]; then echo "File eviden tidak terenkripsi: $f"; bad=1; fi
+              case "$(head -c 4 "$f")" in DSE1|DSE2) ;; *) echo "File eviden tidak terenkripsi: $f"; bad=1;; esac
             done < <(find eviden -type f -print0)
             exit $bad
           fi
@@ -47,6 +47,7 @@ jobs:
           node --check assets/dashboard.js
           node --check tools/validasi-data.mjs
           node --check tools/enkripsi-data.mjs
+          node --check tools/sinkron-dashboard.mjs
       - name: Tidak ada skrip atau gaya dari luar, CSP dan noindex terpasang
         run: |
           if grep -nE '<script[^>]+src="https?://|<link[^>]+href="https?://' index.html; then echo "Ada aset eksternal"; exit 1; fi
