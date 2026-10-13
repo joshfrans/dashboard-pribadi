@@ -6,7 +6,7 @@
 //   DSE_KUNCI=<base64 32 byte> node sinkron-dashboard.mjs <folder_keluaran> [--sudah sudah.json] [--repo pemilik/repo] [--dasar URL-uji/]
 //   (opsional) DSE_SANDI=<kata sandi dashboard> untuk berkas lama format DSE1 / indeks lama.
 //
-// Keluaran: <folder>/sinkron.json  { indeks: "k2"|"sandi"|"tidak-terbaca"|"kosong", eviden: [...], status: {...} }
+// Keluaran: <folder>/sinkron.json  { indeks: "k2"|"sandi"|"tidak-terbaca"|"kosong", eviden: [...], status: {...}, ms: {"<idCR>::<milestone>": {...}} }
 //           <folder>/files/<id>.<ext>  berkas asli untuk eviden yang belum ada di --sudah (daftar id)
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { webcrypto as crypto } from "node:crypto";
@@ -55,7 +55,7 @@ async function bukaBerkas(u) {
 }
 
 mkdirSync(path.join(out, "files"), { recursive: true });
-const hasil = { repo, diambil: new Date().toISOString(), indeks: "kosong", eviden: [], status: {}, statusMode: "kosong", catatan: [] };
+const hasil = { repo, diambil: new Date().toISOString(), indeks: "kosong", eviden: [], status: {}, ms: {}, statusMode: "kosong", catatan: [] };
 
 const idx = await ambil("data/eviden.enc.json");
 if (idx) {
@@ -76,10 +76,10 @@ if (idx) {
 }
 const st = await ambil("data/status.enc.json");
 if (st) {
-  try { const o = await bukaJSON(st); hasil.statusMode = o.mode; hasil.status = o.data.status || {}; }
+  try { const o = await bukaJSON(st); hasil.statusMode = o.mode; hasil.status = o.data.status || {}; hasil.ms = o.data.ms || {}; }
   catch (e) { hasil.statusMode = "tidak-terbaca"; hasil.catatan.push("status tugas: " + (e.message || e)); }
 }
 writeFileSync(path.join(out, "sinkron.json"), JSON.stringify(hasil, null, 1) + "\n");
 const baru = hasil.eviden.filter(x => x.baru);
-console.log(`OK indeks=${hasil.indeks} · ${hasil.eviden.length} eviden (${baru.length} baru, ${baru.filter(x => x.galat).length} galat) · status=${hasil.statusMode} ${Object.keys(hasil.status).length} tugas`);
+console.log(`OK indeks=${hasil.indeks} · ${hasil.eviden.length} eviden (${baru.length} baru, ${baru.filter(x => x.galat).length} galat) · status=${hasil.statusMode} ${Object.keys(hasil.status).length} tugas · ${Object.keys(hasil.ms).length} milestone CR`);
 for (const c of hasil.catatan) console.log("CATATAN:", c);
