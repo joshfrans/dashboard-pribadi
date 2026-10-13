@@ -185,7 +185,7 @@ ul.notes li::marker{color:var(--warn)}
 .cr.s-risk{border-left-color:var(--warn)}
 .cr.s-hold,.cr.s-stale,.cr.s-check{border-left-color:var(--st-td)}
 .cr.s-done{border-left-color:var(--ok)}
-.cr-row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,1.7fr) 250px;gap:14px;align-items:center;padding:12px 14px}
+.cr-row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,1.7fr) 330px;gap:14px;align-items:center;padding:12px 14px}
 @media (max-width:820px){.cr-row{grid-template-columns:minmax(0,1fr) auto}.cr-row .c-prog,.cr-row .c-next{grid-column:1/-1}}
 .cr-name{display:grid;gap:3px;min-width:0}
 .cr-name b{font-weight:700;overflow-wrap:anywhere}
@@ -209,7 +209,7 @@ ul.notes li::marker{color:var(--warn)}
 .cr-body{padding:0 14px 16px;display:grid;gap:14px}
 .cr-body p{margin:0;max-width:80ch;font-size:14px}
 .ms{display:grid;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.ms div{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
+.ms div{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto 96px;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
 .ms div:last-child{border-bottom:0}
 .ms .when{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
 .ms .k{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--sunk);display:block}
@@ -666,3 +666,7 @@ a.ev-tag.lnk:hover{text-decoration:underline}
 .toast .tbtn{background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:0 10px;min-height:32px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
 @media (max-width:900px){.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
+/* v8: tombol aksi milestone CR */
+.ms-act{display:flex;justify-content:flex-end}
+.ms-act:empty{min-height:1px}
+@media (max-width:560px){.ms div{grid-template-columns:minmax(0,1fr) auto}.ms div .when{grid-column:1/-1;order:3}.ms-act{grid-column:1/-1;order:4;justify-content:flex-start}}
