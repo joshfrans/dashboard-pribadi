@@ -460,6 +460,8 @@
       row.appendChild(nx);
       var sd = el("div", "c-side"); sd.appendChild(el("span", "chip " + sc, c.statusJadwal || "–"));
       if (c.update) { var age = -daysTo(c.update); if (age > 21) sd.appendChild(el("span", "stale", "update " + age + " hari lalu")); }
+      if (m) msBtn(c, m, sd);
+      else if (c.viaAksi) { var lastM = (c.milestones || []).filter(function (x) { return x.viaAksi; }).pop(); msBtn(c, lastM, sd); }
       var tg = el("button", "btn", crOpen === c.id ? "Tutup" : "Rincian"); tg.type = "button"; tg.setAttribute("aria-expanded", String(crOpen === c.id));
       tg.addEventListener("click", function () { crOpen = crOpen === c.id ? null : c.id; renderCR(); });
       sd.appendChild(tg); row.appendChild(sd); box.appendChild(row);
@@ -470,7 +472,8 @@
           var ms = el("div", "ms"); ms.appendChild(el("span", "k ms-k", "Milestone"));
           c.milestones.forEach(function (x) {
             var r = el("div"); r.appendChild(el("span", null, x.nama)); r.appendChild(el("span", "when", x.label || (x.tanggal ? shortD(x.tanggal) : "–")));
-            r.appendChild(el("span", "chip " + (MSC[x.status] || "s-hold"), x.status || "–")); ms.appendChild(r);
+            r.appendChild(el("span", "chip " + (MSC[x.status] || "s-hold"), (x.status || "–") + (x.viaAksi ? " · dashboard" : "")));
+            var ab = el("span", "ms-act"); msBtn(c, x, ab); r.appendChild(ab); ms.appendChild(r);
           });
           body.appendChild(ms);
         }
@@ -939,6 +942,16 @@
       if (a.status === "done") t.doneAt = a.doneAt || a.at;
       t.viaAksi = true;
     });
+    // milestone CR yang ditandai selesai dari dashboard (kunci "<idCR>::<nama milestone>")
+    Object.keys(ACT.ms || {}).forEach(function (k) {
+      var a = ACT.ms[k], i = k.indexOf("::"), c = i > 0 && d.cr[k.slice(0, i)], nm = k.slice(i + 2);
+      if (!c || !a || a.status !== "Selesai") return;
+      (c.milestones || []).forEach(function (m) { if (m.nama === nm && m.status !== "Selesai") { m.status = "Selesai"; m.viaAksi = true; m.doneAt = a.at; } });
+    });
+    Object.keys(d.cr || {}).forEach(function (id) {
+      var c = d.cr[id], ms = c.milestones || [];
+      if (ms.length && c.statusJadwal !== "Selesai" && ms.every(function (m) { return m.status === "Selesai"; }) && ms.some(function (m) { return m.viaAksi; })) { c.statusJadwal = "Selesai"; c.progres = 100; c.viaAksi = true; }
+    });
   }
   var toastEl = null, toastT = null;
   function toast(msg, cls, act) {
@@ -978,6 +991,36 @@
     if (t.status !== "doing" && !compact) { var s = el("button", "btn sm ghost", "Mulai"); s.type = "button"; s.setAttribute("aria-label", "Tandai sedang dikerjakan: " + t.title); s.addEventListener("click", function () { setTaskState(t, "doing"); }); box.appendChild(s); }
     var b = el("button", "btn sm ok", "✓ Selesai"); b.type = "button"; b.setAttribute("aria-label", "Tandai selesai: " + t.title);
     b.addEventListener("click", function () { setTaskState(t, "done"); }); box.appendChild(b);
+  }
+  function setMsState(c, m, done) {
+    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Eviden → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
+    var k = c.id + "::" + m.nama; if (saving[k]) return;
+    ACT.ms = ACT.ms || {};
+    var prev = ACT.ms[k], val = done ? { status: "Selesai", at: nowIso(), cr: c.id, nama: m.nama } : null;
+    saving[k] = true;
+    if (val) ACT.ms[k] = val; else delete ACT.ms[k];
+    rebuild(); toast("Menyimpan status milestone…", "");
+    saveStatus(function (o) { o.ms = o.ms || {}; if (val) o.ms[k] = val; else delete o.ms[k]; return o; }, 0).then(function () {
+      if (done) toast("✓ Milestone “" + shortT(m.nama) + "” · " + shortT(c.nama) + " selesai.", "ok", { label: "Batalkan", fn: function () { setMsState(c, m, false); } });
+      else toast("Milestone “" + shortT(m.nama) + "” dikembalikan.", "");
+    }).catch(function (e) {
+      ACT.ms = ACT.ms || {}; if (prev) ACT.ms[k] = prev; else delete ACT.ms[k];
+      rebuild(); toast("! Status belum tersimpan: " + ghMsg(e), "bad");
+    }).then(function () { delete saving[k]; });
+  }
+  function msBtn(c, m, box, label) {
+    if (!loaded || !m || !m.nama) return;
+    var b;
+    if (m.status !== "Selesai") {
+      b = el("button", "btn sm ok", label || "✓ Selesai"); b.type = "button";
+      b.title = "Tandai milestone selesai: " + m.nama; b.setAttribute("aria-label", "Tandai milestone selesai: " + m.nama + " (" + c.nama + ")");
+      b.addEventListener("click", function () { setMsState(c, m, true); });
+    } else if (m.viaAksi) {
+      b = el("button", "btn sm ghost", "Batalkan"); b.type = "button";
+      b.setAttribute("aria-label", "Batalkan milestone selesai: " + m.nama + " (" + c.nama + ")");
+      b.addEventListener("click", function () { setMsState(c, m, false); });
+    }
+    if (b) box.appendChild(b);
   }
 
   // --- perbarui data dashboard (tracker.enc.json) dari file yang dikirim Claude ---
