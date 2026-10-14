@@ -7,8 +7,8 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Dashboard Pribadi · Strategi &amp; Evaluasi</title>
-<link rel="stylesheet" href="assets/dashboard.css?v=20261013-2">
-<script src="assets/dashboard.js?v=20261013-2" defer></script>
+<link rel="stylesheet" href="assets/dashboard.css?v=20261014-1">
+<script src="assets/dashboard.js?v=20261014-1" defer></script>
 </head>
 <body>
 <a class="skip" href="#konten">Langsung ke isi</a>
@@ -29,13 +29,13 @@
     </nav>
     <div class="side-foot">
       <span id="sideData">Memuat data…</span>
-      <span>Unggah eviden dan tandai tugas ✓ Selesai langsung di dashboard. Perubahan disalin ke tracker otomatis.</span>
+      <span>Unggah eviden, tandai tugas ✓ Selesai, dan tulis catatan progres langsung di dashboard. Semua disalin ke tracker otomatis.</span>
       <button class="btn" type="button" id="btnLock">Kunci dashboard</button>
     </div>
   </aside>
 
   <main class="content" id="konten">
-    <div class="topbar">
+    <div class="topbar band">
       <div><div class="crumb">Dashboard pribadi · Strategi &amp; Evaluasi</div><h1 id="viewTitle">Ringkasan</h1></div>
       <div class="fbar" aria-label="Status data">
         <span class="fchip"><span class="k">Hari ini</span><span id="todayLbl">—</span></span>
@@ -88,6 +88,10 @@
           <p class="sub card-sub">milestone CR, rapat &amp; tenggat tugas</p>
           <div class="agenda" id="agenda"></div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Catatan progres &amp; tindak lanjut</h2><span class="sub" id="noteFeedSub"></span></div>
+        <div class="nfeed" id="noteFeed" role="list"></div>
       </div>
     </section>
 
@@ -273,7 +277,7 @@
   </main>
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
-<div class="lock" id="lock" hidden>
+<div class="lock tema" id="lock" hidden>
   <form class="lock-card" id="lockForm" autocomplete="on">
     <i class="lock-mark" aria-hidden="true"></i>
     <h1>Dashboard Pribadi</h1>
