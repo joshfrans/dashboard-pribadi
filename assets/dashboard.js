@@ -1,4 +1,5 @@
 /* Dashboard Pribadi Strategi & Evaluasi — GitHub Pages, data terenkripsi (AES-256-GCM) (view: ringkasan, rutin, CR, CoC, KPI 4b, tugas).
+   v10: tombol Catatan (progres · tindak lanjut · kendala · info) di setiap aksi, disimpan terenkripsi di data/status.enc.json.
    Sumber data: data/tracker.enc.json (ekspor tracker claude.ai → tools/ekspor_tracker.py → tools/enkripsi-data.mjs).
    Semua teks dari data ditulis dengan textContent; tidak ada innerHTML berisi data. */
 (function () {
@@ -309,7 +310,7 @@
     tlist.slice(0, TLN).forEach(function (t) {
       var r0 = el("div", "kin-ti" + (t.status === "done" ? " done" : isLate(t) ? " late" : "")); r0.setAttribute("role", "listitem");
       var m0 = el("div", "km"); m0.appendChild(el("b", null, t.title)); m0.appendChild(el("span", "sub", (isLate(t) ? "Terlambat · tenggat " + shortD(t.due) : "Tenggat " + (t.time || "–") + " WIB") + (t.status === "done" ? " · " + (t.viaEviden ? "eviden masuk" : t.viaAksi ? "selesai di dashboard" : "selesai") : "")));
-      r0.appendChild(m0); var s0 = el("div", "tside2"); actBtns(t, s0, true); r0.appendChild(s0); tl.appendChild(r0);
+      lastNote(kTask(t.id), m0); r0.appendChild(m0); var s0 = el("div", "tside2"); actBtns(t, s0, true); r0.appendChild(s0); tl.appendChild(r0);
     });
     if (!tlist.length) tl.appendChild(el("div", "empty", "Tidak ada tugas bertenggat hari ini."));
     if (tlist.length > TLN) { var mo = el("a", "more", "+" + (tlist.length - TLN) + " tugas lain di Daftar tugas →"); mo.href = "#tugas"; mo.addEventListener("click", function () { filter = "today"; renderList(); }); tl.appendChild(mo); }
@@ -478,8 +479,10 @@
       var sd = el("div", "c-side"), chp = el("span", "chip " + sc, c.statusJadwal || "–"); sd.appendChild(chp);
       if (c.viaAksi && c.statusAsal && c.statusAsal !== c.statusJadwal) tipOn(chp, "Dihitung ulang dari milestone yang Anda tandai di dashboard (sebelumnya " + c.statusAsal + ")");
       if (c.update) { var age = -daysTo(c.update); if (age > 21) sd.appendChild(el("span", "stale", "update " + age + " hari lalu")); }
-      if (m) msBtn(c, m, sd);
-      else if (c.viaAksi) { var lastM = (c.milestones || []).filter(function (x) { return x.viaAksi; }).pop(); msBtn(c, lastM, sd); }
+      if (m) msBtn(c, m, sd, null, false, true);
+      else if (c.viaAksi) { var lastM = (c.milestones || []).filter(function (x) { return x.viaAksi; }).pop(); msBtn(c, lastM, sd, null, false, true); }
+      noteBtn(kCr(c), sd);
+      lastNote(kCr(c), nm);
       var tg = el("button", "btn", crOpen === c.id ? "Tutup" : "Rincian"); tg.type = "button"; tg.setAttribute("aria-expanded", String(crOpen === c.id));
       tg.addEventListener("click", function () { crOpen = crOpen === c.id ? null : c.id; renderCR(); });
       sd.appendChild(tg); row.appendChild(sd); box.appendChild(row);
@@ -495,6 +498,11 @@
           });
           body.appendChild(ms);
         }
+        var cn = notesOf(kCr(c));
+        var nhd = el("div", "nhead"); nhd.appendChild(el("div", "eyebrow", "Catatan progres & tindak lanjut" + (cn.length ? " (" + cn.length + ")" : "")));
+        var nadd = el("button", "btn sm", "+ Tambah catatan"); nadd.type = "button"; nadd.setAttribute("aria-label", "Tambah catatan untuk " + c.nama); nadd.addEventListener("click", function () { openNotes(kCr(c)); }); nhd.appendChild(nadd); body.appendChild(nhd);
+        if (cn.length) { var nul = el("ul", "nlist"); cn.slice(0, 5).forEach(function (x) { nul.appendChild(noteItem(x, false)); }); body.appendChild(nul); if (cn.length > 5) { var nmore = el("button", "linkbtn", "Lihat semua " + cn.length + " catatan →"); nmore.type = "button"; nmore.addEventListener("click", function () { openNotes(kCr(c)); }); body.appendChild(nmore); } }
+        else body.appendChild(el("p", "sub", "Belum ada catatan untuk CR ini."));
         if ((c.isu || []).length) { body.appendChild(el("div", "eyebrow", "Isu & hal yang perlu dikawal")); var ul = el("ul", "notes"); c.isu.forEach(function (x) { ul.appendChild(el("li", null, x)); }); body.appendChild(ul); }
         var src = (c.sumber || []).length ? "Sumber: " + c.sumber.join("; ") + " · " : "";
         body.appendChild(el("div", "src", src + (c.update ? "catatan terakhir " + shortD(c.update) : "")));
@@ -682,6 +690,7 @@
       if (isLate(t)) meta.appendChild(el("span", "pill late", "Terlambat"));
       meta.appendChild(el("span", "mono", "Tenggat " + shortD(t.due) + (t.time ? " " + t.time : "")));
       main.appendChild(meta);
+      lastNote(kTask(t.id), main);
       var side = el("div", "tside2"), sr = el("span", "seg-ro"), bar = el("span", "bar"), f = el("b"); f.style.width = prog(t) + "%"; bar.appendChild(f);
       sr.appendChild(bar); sr.appendChild(document.createTextNode(t.status === "done" ? (t.viaEviden ? "Selesai · eviden" : t.viaAksi ? "Selesai · dashboard" : "Selesai") : prog(t) + "%")); side.appendChild(sr);
       actBtns(t, side, !!jenisForTask(t.id));
@@ -704,7 +713,7 @@
     $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden dan tombol ✓ Selesai disimpan terenkripsi di repo, lalu disalin ke tracker privat oleh sinkron otomatis (06.30, 12.30, 17.30 WIB).";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
-  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); }
+  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); renderNotes(); }
 
   // ---- data terenkripsi: kata sandi → PBKDF2 → AES-256-GCM (WebCrypto) ----
   var SKEY = "dse-pribadi:sandi";
@@ -959,7 +968,9 @@
   function applyAct(d) {
     Object.keys(ACT.status || {}).forEach(function (id) {
       var a = ACT.status[id], t = d.tasks[id];
-      if (!t || !a || (RANK[a.status] || 0) <= (RANK[t.status] || 0)) return;
+      if (!t || !a) return;
+      var ra = RANK[a.status] || 0, rt = RANK[t.status] || 0;
+      if (ra < rt || (ra === rt && !(a.status === "doing" && (+a.progress || 0) > (+t.progress || 0)))) return;
       t.status = a.status; t.progress = a.status === "done" ? 100 : Math.max(+t.progress || 0, +a.progress || 0);
       if (a.status === "done") t.doneAt = a.doneAt || a.at;
       t.viaAksi = true;
@@ -1016,11 +1027,12 @@
     if (!loaded || !t.id) return;
     if (t.status === "done") {
       if (t.viaAksi) { var u = el("button", "btn sm ghost", "Batalkan"); u.type = "button"; u.setAttribute("aria-label", "Batalkan status selesai: " + t.title); u.addEventListener("click", function () { setTaskState(t, null); }); box.appendChild(u); }
-      return;
+    } else {
+      if (t.status !== "doing" && !compact) { var s = el("button", "btn sm ghost", "Mulai"); s.type = "button"; s.setAttribute("aria-label", "Tandai sedang dikerjakan: " + t.title); s.addEventListener("click", function () { setTaskState(t, "doing"); }); box.appendChild(s); }
+      var b = el("button", "btn sm ok", "✓ Selesai"); b.type = "button"; b.setAttribute("aria-label", "Tandai selesai: " + t.title);
+      b.addEventListener("click", function () { setTaskState(t, "done"); }); box.appendChild(b);
     }
-    if (t.status !== "doing" && !compact) { var s = el("button", "btn sm ghost", "Mulai"); s.type = "button"; s.setAttribute("aria-label", "Tandai sedang dikerjakan: " + t.title); s.addEventListener("click", function () { setTaskState(t, "doing"); }); box.appendChild(s); }
-    var b = el("button", "btn sm ok", "✓ Selesai"); b.type = "button"; b.setAttribute("aria-label", "Tandai selesai: " + t.title);
-    b.addEventListener("click", function () { setTaskState(t, "done"); }); box.appendChild(b);
+    noteBtn(kTask(t.id), box, compact);
   }
   // tombol aksi generik untuk tugas tracker (dipakai di semua menu)
   function taskOf(id) { return id && D.tasks[id] ? Object.assign({ id: id }, D.tasks[id]) : null; }
@@ -1029,8 +1041,8 @@
     var b, al;
     if (t.status !== "done") { b = el("button", "btn sm ok" + (mini ? " xs" : ""), mini ? "✓" : "✓ " + (label || "Selesai")); al = "Tandai selesai: " + t.title + " (" + shortD(t.due) + ")"; b.addEventListener("click", function () { setTaskState(t, "done"); }); }
     else if (t.viaAksi) { b = el("button", "btn sm ghost" + (mini ? " xs" : ""), mini ? "↺" : "Batalkan" + (label ? " " + label : "")); al = "Batalkan status selesai: " + t.title + " (" + shortD(t.due) + ")"; b.addEventListener("click", function () { setTaskState(t, null); }); }
-    if (!b) return;
-    b.type = "button"; b.title = al; b.setAttribute("aria-label", al); box.appendChild(b);
+    if (b) { b.type = "button"; b.title = al; b.setAttribute("aria-label", al); box.appendChild(b); }
+    noteBtn(kTask(t.id), box, mini);
   }
   function setMsState(c, m, done) {
     if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Eviden → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
@@ -1048,7 +1060,7 @@
       rebuild(); toast("! Status belum tersimpan: " + ghMsg(e), "bad");
     }).then(function () { delete saving[k]; });
   }
-  function msBtn(c, m, box, label, mini) {
+  function msBtn(c, m, box, label, mini, noNote) {
     if (!loaded || !m || !m.nama) return;
     var b;
     if (m.status !== "Selesai") {
@@ -1061,6 +1073,201 @@
       b.addEventListener("click", function () { setMsState(c, m, false); });
     }
     if (b) box.appendChild(b);
+    if (!noNote) noteBtn(kMs(c, m), box, mini);
+  }
+
+  // --- catatan progres & tindak lanjut: ACT.catatan (terenkripsi di status.enc.json), disalin ke tracker oleh sinkron otomatis ---
+  // kunci: "t:<idTugas>" · "cr:<idCR>" · "ms:<idCR>::<nama milestone>"
+  var NJ = [["progres", "Progres"], ["tl", "Tindak lanjut"], ["kendala", "Kendala"], ["info", "Info"]], NJL = {};
+  NJ.forEach(function (x) { NJL[x[0]] = x[1]; });
+  var nDlg = null, nCtx = null, nDraft = {}, SVGNS = "http://www.w3.org/2000/svg";
+  function kTask(id) { return "t:" + id; }
+  function kCr(c) { return "cr:" + c.id; }
+  function kMs(c, m) { return "ms:" + c.id + "::" + m.nama; }
+  function icoNote() {
+    var s = document.createElementNS(SVGNS, "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); s.setAttribute("class", "ico");
+    var p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"); s.appendChild(p); return s;
+  }
+  function fmtDT(iso) {
+    try { return new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)); } catch (e) { return iso || ""; }
+  }
+  function clip(s, n) { s = (s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+  function infoFromKey(k) {
+    var i, c;
+    if (k.indexOf("t:") === 0) { var t = taskOf(k.slice(2)); return t ? { kind: "tugas", kl: "Tugas", title: t.title, sub: (CAT[t.cat] || "Tugas") + " · tenggat " + shortD(t.due) + (t.time ? " " + t.time : ""), task: t } : { kind: "lain", kl: "Tugas", title: k.slice(2), sub: "Tugas tidak ada lagi di data terbaru" }; }
+    if (k.indexOf("cr:") === 0) { c = D.cr[k.slice(3)]; return c ? { kind: "cr", kl: "Change Request", title: c.nama, sub: [c.aplikasi, c.fase].filter(Boolean).join(" · "), crId: k.slice(3) } : { kind: "lain", kl: "CR", title: k.slice(3), sub: "" }; }
+    if (k.indexOf("ms:") === 0) { i = k.indexOf("::"); c = D.cr[k.slice(3, i)]; return { kind: "milestone", kl: "Milestone CR", title: k.slice(i + 2), sub: c ? c.nama : k.slice(3, i), crId: k.slice(3, i) }; }
+    return { kind: "lain", kl: "Catatan", title: k, sub: "" };
+  }
+  // catatan untuk satu kunci; untuk CR ikut menampilkan catatan milestone-nya
+  function notesOf(k) {
+    var all = ACT.catatan || {}, out = [];
+    (all[k] || []).forEach(function (n) { out.push(Object.assign({ _k: k }, n)); });
+    if (k.indexOf("cr:") === 0) {
+      var pre = "ms:" + k.slice(3) + "::";
+      Object.keys(all).forEach(function (kk) { if (kk.indexOf(pre) === 0) (all[kk] || []).forEach(function (n) { out.push(Object.assign({ _k: kk, src: kk.slice(pre.length) }, n)); }); });
+    }
+    return out.sort(function (a, b) { return ((b.at || "") + b.id).localeCompare((a.at || "") + a.id); });
+  }
+  function noteBtn(k, box, mini) {
+    if (!loaded || !k) return;
+    var n = notesOf(k).length, info = infoFromKey(k);
+    var b = el("button", "btn sm ghost note-btn" + (mini ? " xs" : "") + (n ? " has" : "")); b.type = "button";
+    b.appendChild(icoNote());
+    if (!mini) b.appendChild(el("span", null, n ? "Catatan " + n : "Catatan")); else if (n) b.appendChild(el("span", "nn", String(n)));
+    var al = (n ? "Lihat " + n + " catatan / tambah catatan: " : "Tambah catatan progres: ") + info.title;
+    b.title = al; b.setAttribute("aria-label", al);
+    b.addEventListener("click", function () { openNotes(k); });
+    box.appendChild(b);
+  }
+  function lastNote(k, box) {
+    var n = notesOf(k)[0]; if (!n) return;
+    var p = el("p", "nlast"); p.appendChild(el("span", "nj nj-" + n.jenis, NJL[n.jenis] || "Catatan"));
+    p.appendChild(el("span", "ntxt", (n.src ? n.src + ": " : "") + clip(n.teks, 140)));
+    p.appendChild(el("time", "nt", fmtDT(n.at))); box.appendChild(p);
+  }
+  function noteItem(n, canDel) {
+    var li = el("li", "nitem"), h = el("div", "nh");
+    h.appendChild(el("span", "nj nj-" + n.jenis, NJL[n.jenis] || "Catatan"));
+    if (n.src) h.appendChild(el("span", "nsrc", "Milestone " + n.src));
+    if (n.progres != null) h.appendChild(el("span", "npg", "progres " + n.progres + "%"));
+    if (n.sampai) { var late = n.jenis === "tl" && n.sampai < TODAY; h.appendChild(el("span", "nsd" + (late ? " late" : ""), (late ? "lewat target " : "target ") + shortD(n.sampai))); }
+    h.appendChild(el("time", "nt", fmtDT(n.at)));
+    li.appendChild(h); li.appendChild(el("p", "ntx", n.teks));
+    if (canDel) {
+      var d = el("button", "btn sm ghost xs ndel", "Hapus"); d.type = "button"; d.setAttribute("aria-label", "Hapus catatan " + fmtDT(n.at));
+      d.addEventListener("click", function () { delNote(n._k, n); });
+      li.appendChild(d);
+    }
+    return li;
+  }
+  function buildNoteDlg() {
+    nDlg = el("dialog", "ndlg"); nDlg.setAttribute("aria-labelledby", "ndTitle");
+    var f = el("form", "nd"); f.noValidate = true;
+    var hd = el("div", "nd-h"), ht = el("div");
+    var kl = el("div", "eyebrow"); kl.id = "ndKind"; ht.appendChild(kl);
+    var h2 = el("h2"); h2.id = "ndTitle"; ht.appendChild(h2);
+    var sb = el("p", "sub"); sb.id = "ndSub"; ht.appendChild(sb); hd.appendChild(ht);
+    var x = el("button", "nd-x", "×"); x.type = "button"; x.setAttribute("aria-label", "Tutup"); x.addEventListener("click", function () { nDlg.close(); }); hd.appendChild(x);
+    f.appendChild(hd);
+    var fs = el("fieldset", "nseg"); fs.appendChild(el("legend", null, "Jenis catatan"));
+    NJ.forEach(function (j, i) { var lb = el("label"), r = el("input"); r.type = "radio"; r.name = "ndJenis"; r.value = j[0]; if (!i) r.checked = true; lb.appendChild(r); lb.appendChild(el("span", "nj-" + j[0], j[1])); fs.appendChild(lb); });
+    f.appendChild(fs);
+    var tl = el("label", "nd-l", "Isi catatan"); tl.htmlFor = "ndText"; f.appendChild(tl);
+    var ta = el("textarea"); ta.id = "ndText"; ta.rows = 4; ta.maxLength = 1000; ta.required = true; ta.placeholder = "Apa yang sudah dikerjakan, hasilnya, kendala, dan langkah berikutnya"; f.appendChild(ta);
+    var cnt = el("div", "nd-cnt"); cnt.id = "ndCnt"; f.appendChild(cnt);
+    ta.addEventListener("input", function () { cnt.textContent = ta.value.length + "/1000"; if (nCtx) nDraft[nCtx.k] = ta.value; });
+    var row = el("div", "nd-row");
+    var pw = el("div", "nd-f"); pw.id = "ndProgWrap";
+    var pl = el("label", "nd-l", "Progres tugas (%)"); pl.htmlFor = "ndProg"; pw.appendChild(pl);
+    var pi = el("input"); pi.id = "ndProg"; pi.type = "number"; pi.min = "0"; pi.max = "100"; pi.step = "5"; pi.inputMode = "numeric"; pw.appendChild(pi);
+    var ph = el("small", "sub"); ph.id = "ndProgHint"; pw.appendChild(ph); row.appendChild(pw);
+    var dw = el("div", "nd-f"), dl = el("label", "nd-l", "Target tindak lanjut"); dl.htmlFor = "ndDue"; dw.appendChild(dl);
+    var di = el("input"); di.id = "ndDue"; di.type = "date"; dw.appendChild(di); dw.appendChild(el("small", "sub", "opsional")); row.appendChild(dw);
+    f.appendChild(row);
+    var msg = el("p", "nd-msg"); msg.id = "ndMsg"; msg.setAttribute("role", "alert"); msg.hidden = true; f.appendChild(msg);
+    var ac = el("div", "nd-act"), cb = el("button", "btn", "Batal"); cb.type = "button"; cb.addEventListener("click", function () { nDlg.close(); });
+    var sv = el("button", "btn primary", "Simpan catatan"); sv.type = "submit"; ac.appendChild(cb); ac.appendChild(sv); f.appendChild(ac);
+    var hh = el("div", "nd-hist"), h3 = el("h3"); h3.id = "ndHistH"; hh.appendChild(h3);
+    var ul = el("ul", "nlist"); ul.id = "ndList"; hh.appendChild(ul); f.appendChild(hh);
+    f.addEventListener("submit", function (e) { e.preventDefault(); submitNote(); });
+    nDlg.addEventListener("click", function (e) { if (e.target === nDlg) nDlg.close(); });
+    nDlg.appendChild(f); document.body.appendChild(nDlg);
+  }
+  function fillNoteHist() {
+    if (!nDlg || !nCtx) return;
+    var list = notesOf(nCtx.k), ul = $("#ndList"); clear(ul);
+    $("#ndHistH").textContent = list.length ? "Riwayat catatan (" + list.length + ")" : "Belum ada catatan";
+    list.forEach(function (n) { ul.appendChild(noteItem(n, true)); });
+  }
+  function openNotes(k) {
+    if (!nDlg) buildNoteDlg();
+    var info = infoFromKey(k); nCtx = { k: k, info: info };
+    $("#ndKind").textContent = info.kl + (info.kind === "cr" ? " · termasuk catatan milestone" : "");
+    $("#ndTitle").textContent = info.title; $("#ndSub").textContent = info.sub || "";
+    var t = info.task, pw = $("#ndProgWrap"), pi = $("#ndProg");
+    pw.hidden = !(t && t.status !== "done"); pi.value = "";
+    if (t) { pi.placeholder = String(prog(t)); $("#ndProgHint").textContent = "sekarang " + prog(t) + "% · 100% = selesai"; }
+    $("#ndDue").value = ""; $("#ndMsg").hidden = true;
+    var ta = $("#ndText"); ta.value = nDraft[k] || ""; $("#ndCnt").textContent = ta.value.length + "/1000";
+    nDlg.querySelector('input[name="ndJenis"][value="progres"]').checked = true;
+    fillNoteHist();
+    if (!nDlg.open) nDlg.showModal();
+    ta.focus();
+  }
+  function ndErr(t) { var m = $("#ndMsg"); m.textContent = t; m.hidden = false; }
+  function submitNote() {
+    if (!nCtx) return;
+    var teks = $("#ndText").value.trim(), jn = (nDlg.querySelector('input[name="ndJenis"]:checked') || {}).value || "progres";
+    if (teks.length < 3) { ndErr("Tulis isi catatan minimal 3 karakter."); $("#ndText").focus(); return; }
+    if (!TOKEN) { ndErr("Hubungkan GitHub dulu (menu Unggah eviden → Koneksi GitHub) agar catatan bisa disimpan."); return; }
+    var info = nCtx.info, t = info.task, pv = $("#ndProg").value, due = $("#ndDue").value, pg = null;
+    if (t && t.status !== "done" && pv !== "") {
+      pg = Math.round(+pv);
+      if (isNaN(pg) || pg < 0 || pg > 100) { ndErr("Progres harus angka 0–100."); $("#ndProg").focus(); return; }
+    }
+    var note = { id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: nowIso(), jenis: jn, teks: teks, objek: info.kind, judul: info.title };
+    if (pg != null) note.progres = pg;
+    if (due) note.sampai = due;
+    if (info.crId) note.cr = info.crId;
+    var stVal = null;
+    if (pg != null && pg > prog(t)) stVal = pg >= 100 ? { status: "done", at: note.at, doneAt: note.at, progress: 100 } : { status: "doing", at: note.at, doneAt: null, progress: pg };
+    nDlg.close(); saveNote(nCtx.k, note, stVal, t);
+  }
+  function saveNote(k, note, stVal, t) {
+    ACT.catatan = ACT.catatan || {};
+    var prevList = (ACT.catatan[k] || []).slice(), tid = t && t.id, prevSt = tid ? ACT.status[tid] : null;
+    ACT.catatan[k] = prevList.concat([note]); if (stVal) ACT.status[tid] = stVal;
+    rebuild(); toast("Menyimpan catatan…", "");
+    saveStatus(function (o) {
+      o.catatan = o.catatan || {};
+      o.catatan[k] = (o.catatan[k] || []).filter(function (x) { return x.id !== note.id; }).concat([note]);
+      if (stVal) { var cur = o.status[tid]; if (!cur || (RANK[stVal.status] || 0) > (RANK[cur.status] || 0) || (stVal.status === cur.status && (+stVal.progress || 0) > (+cur.progress || 0))) o.status[tid] = stVal; }
+      return o;
+    }, 0).then(function () {
+      delete nDraft[k];
+      toast("✓ Catatan disimpan" + (stVal ? " · progres " + stVal.progress + "%" : "") + ".", "ok", { label: "Batalkan", fn: function () { delNote(k, note, true); } });
+    }).catch(function (e) {
+      ACT.catatan[k] = prevList; if (tid) { if (prevSt) ACT.status[tid] = prevSt; else delete ACT.status[tid]; }
+      nDraft[k] = note.teks; rebuild();
+      toast("! Catatan belum tersimpan: " + ghMsg(e), "bad", { label: "Buka lagi", fn: function () { openNotes(k); } });
+    });
+  }
+  function delNote(k, n, quiet) {
+    if (!TOKEN) { toast("Hubungkan GitHub dulu agar catatan bisa dihapus.", "bad"); return; }
+    ACT.catatan = ACT.catatan || {};
+    var prevList = (ACT.catatan[k] || []).slice(), clean = {};
+    Object.keys(n).forEach(function (x) { if (x !== "_k" && x !== "src") clean[x] = n[x]; });
+    ACT.catatan[k] = prevList.filter(function (x) { return x.id !== n.id; }); if (!ACT.catatan[k].length) delete ACT.catatan[k];
+    rebuild(); fillNoteHist();
+    saveStatus(function (o) { o.catatan = o.catatan || {}; o.catatan[k] = (o.catatan[k] || []).filter(function (x) { return x.id !== n.id; }); if (!o.catatan[k].length) delete o.catatan[k]; return o; }, 0).then(function () {
+      fillNoteHist();
+      toast(quiet ? "Catatan dibatalkan." : "Catatan dihapus.", "", quiet ? null : { label: "Kembalikan", fn: function () { saveNote(k, clean, null, null); } });
+    }).catch(function (e) { ACT.catatan[k] = prevList; rebuild(); fillNoteHist(); toast("! Catatan belum terhapus: " + ghMsg(e), "bad"); });
+  }
+  // ringkasan: catatan terbaru dari semua menu
+  function renderNotes() {
+    var box = $("#noteFeed"); if (!box) return; clear(box);
+    var all = ACT.catatan || {}, rows = [];
+    Object.keys(all).forEach(function (k) { (all[k] || []).forEach(function (n) { rows.push(Object.assign({ _k: k }, n)); }); });
+    rows.sort(function (a, b) { return ((b.at || "") + b.id).localeCompare((a.at || "") + a.id); });
+    var lateTl = rows.filter(function (n) { return n.jenis === "tl" && n.sampai && n.sampai < TODAY; }).length;
+    $("#noteFeedSub").textContent = rows.length ? rows.length + " catatan" + (lateTl ? " · " + lateTl + " tindak lanjut lewat target" : "") : "";
+    if (!loaded) { box.appendChild(el("div", "empty", "Memuat…")); return; }
+    if (!rows.length) { box.appendChild(el("div", "empty", "Belum ada catatan. Tekan tombol Catatan di samping tombol ✓ Selesai pada tugas, milestone, atau CR untuk mencatat progres dan tindak lanjut.")); return; }
+    rows.slice(0, 8).forEach(function (n) {
+      var info = infoFromKey(n._k), b = el("button", "nf-i"); b.type = "button"; b.setAttribute("role", "listitem");
+      b.appendChild(el("span", "nj nj-" + n.jenis, NJL[n.jenis] || "Catatan"));
+      var m = el("span", "nf-m"); m.appendChild(el("b", null, info.title)); m.appendChild(el("span", "ntxt", clip(n.teks, 160)));
+      var meta = [info.kl + (info.sub ? " · " + info.sub : "")];
+      if (n.progres != null) meta.push("progres " + n.progres + "%");
+      if (n.sampai) meta.push((n.jenis === "tl" && n.sampai < TODAY ? "lewat target " : "target ") + shortD(n.sampai));
+      m.appendChild(el("small", "sub", meta.join(" · "))); b.appendChild(m);
+      b.appendChild(el("time", "nt", fmtDT(n.at)));
+      b.setAttribute("aria-label", (NJL[n.jenis] || "Catatan") + ": " + info.title + ". " + clip(n.teks, 160) + ". Buka catatan.");
+      b.addEventListener("click", function () { openNotes(n._k); });
+      box.appendChild(b);
+    });
   }
 
   // --- perbarui data dashboard (tracker.enc.json) dari file yang dikirim Claude ---
