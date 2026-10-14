@@ -888,12 +888,29 @@
     return p.then(function (e) { return e ? evFromEnvelope(e) : { skema: 1, eviden: [] }; })
       .then(function (o) { EV = o; rebuild(); }).catch(function () { /* indeks belum ada atau tidak terbaca: abaikan */ });
   }
+  // eviden → tugas: pakai id yang tersimpan, atau turunkan dari jenis + tanggal (mom-YYYY-MM-DD, kpi4b-YYYY-MM, …)
+  function evTask(x) { return x.tugas || taskIdFor(x.jenis, x.tanggal) || ""; }
+  // tugas rutin dibuat ringkasan pagi di tracker setiap hari kerja; bila data dashboard belum diekspor ulang,
+  // buat padanannya di sini (id sama dengan tracker) agar eviden, tombol aksi, dan matriks rutin tetap jalan.
+  function ensureRoutine(d) {
+    var ex = d.meta && d.meta.diekspor ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date(d.meta.diekspor)) : addD(TODAY, -1);
+    var CATR = { mom: "mom", rekap: "rekap", cresppd: "cr", crlayanan: "cr" };
+    for (var s = addD(ex, 1); s <= TODAY; s = addD(s, 1)) {
+      var wd = (P(s).getUTCDay() + 6) % 7;
+      ROUTINE.forEach(function (r) {
+        var id = r.key + "-" + s;
+        if (r.days.indexOf(wd) < 0 || d.tasks[id]) return;
+        d.tasks[id] = { title: r.title, cat: CATR[r.key] || "lain", due: s, time: "16:00", prio: "normal", status: "todo", progress: 0, routine: true, doneAt: null, sintetis: true };
+      });
+    }
+  }
   function rebuild() {
     if (!BASE) return;
     var d = JSON.parse(JSON.stringify(BASE));
     d.evidenList = (EV.eviden || []).slice().sort(function (a, b) { return (b.tanggal + b.diunggah).localeCompare(a.tanggal + a.diunggah); });
+    ensureRoutine(d);
     d.evidenList.forEach(function (x) {
-      var t = x.tugas && d.tasks[x.tugas];
+      var t = d.tasks[evTask(x)];
       if (t && t.status !== "done") { t.status = "done"; t.progress = 100; t.doneAt = x.diunggah; t.viaEviden = true; }
       if (x.jenis === "kpi4b") { var k = d.kpi[x.tanggal.slice(0, 7)]; if (k) k.adaLaporan = true; }
     });
@@ -915,7 +932,6 @@
     var id = tanggal.replace(/-/g, "") + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
     var path = "eviden/" + tanggal.slice(0, 4) + "/" + tanggal.slice(5, 7) + "/" + id + ".bin";
     var tugas = taskIdFor(jenis, tanggal);
-    if (tugas && !(BASE.tasks || {})[tugas]) tugas = null;
     uploading = true; $("#upBtn").disabled = true; setUpMsg("", "Mengenkripsi file…");
     f.arrayBuffer().then(function (buf) { return encFile(buf); }).then(function (bin) {
       setUpMsg("", "Mengunggah ke GitHub (" + kbStr(bin.length) + ")…");
@@ -1310,7 +1326,7 @@
       var j = el("td"); j.appendChild(el("span", "pill " + (x.jenis === "kpi4b" ? "kpi" : x.jenis === "cresppd" || x.jenis === "crlayanan" || x.jenis === "cr" ? "cr" : x.jenis === "mom" ? "mom" : x.jenis === "rekap" ? "rekap" : "lain"), jenisOf(x.jenis).label)); tr.appendChild(j);
       tr.appendChild(el("td", null, x.ket || "–"));
       var fn = el("td"); fn.appendChild(el("div", "fname", x.nama)); fn.appendChild(el("span", "sub", kbStr(x.ukuran || 0) + " · diunggah " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(x.diunggah)))); tr.appendChild(fn);
-      var tk = el("td"), t = x.tugas && D.tasks[x.tugas];
+      var tk = el("td"), t = D.tasks[evTask(x)];
       tk.appendChild(t ? el("span", "chip s-done", "Tugas selesai") : el("span", "sub", "–")); tr.appendChild(tk);
       var ac = el("td", "act"), b1 = el("button", "btn", "Buka"), b2 = el("button", "btn", "Unduh");
       b1.type = b2.type = "button"; b1.addEventListener("click", function () { openEviden(x, false); }); b2.addEventListener("click", function () { openEviden(x, true); });
