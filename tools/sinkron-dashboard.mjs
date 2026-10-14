@@ -64,6 +64,11 @@ if (idx) {
     const o = await bukaJSON(idx); hasil.indeks = o.mode;
     for (const x of o.data.eviden || []) {
       const item = { ...x, baru: !sudah.has(x.id) };
+      // eviden lama/tanpa id tugas: turunkan dari jenis + tanggal (sama dengan dashboard)
+      if (!item.tugas && item.tanggal) {
+        if (["mom", "rekap", "cresppd", "crlayanan"].includes(item.jenis)) item.tugas = `${item.jenis}-${item.tanggal}`;
+        else if (item.jenis === "kpi4b") item.tugas = `kpi4b-${item.tanggal.slice(0, 7)}`;
+      }
       if (item.baru) {
         try {
           const b = await bukaBerkas(await ambil(x.path));
