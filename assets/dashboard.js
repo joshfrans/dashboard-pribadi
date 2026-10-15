@@ -942,7 +942,7 @@
       var entry = { id: id, path: path, jenis: jenis, tanggal: tanggal, ket: ket, nama: f.name, ukuran: f.size, tipe: f.type || "", diunggah: nowIso(), tugas: tugas };
       return saveIndex(function (o) { o.eviden.push(entry); return o; }, 0);
     }).then(function () {
-      $("#upForm").reset(); $("#upTanggal").value = TODAY; syncUpHint();
+      $("#upForm").reset(); $("#upTanggal").value = TODAY; upDefaultJenis(); syncUpHint();
       setUpMsg("ok", "✓ Eviden tersimpan terenkripsi" + (tugas ? " dan tugas terkait ditandai selesai." : ".") + " Situs memuat versi baru dalam 1–2 menit; daftar di bawah sudah diperbarui.");
     }).catch(function (e) { setUpMsg("bad", "! " + ghMsg(e)); }).then(function () { uploading = false; $("#upBtn").disabled = false; });
   }
@@ -1470,8 +1470,11 @@
   // --- event handler ---
   $("#upForm").addEventListener("submit", doUpload);
   $("#upJenis").addEventListener("change", syncUpHint); $("#upTanggal").addEventListener("change", syncUpHint);
+  // jenis bawaan Jumat = MoM Weekly CR Aplikasi Layanan GA (Sen–Kam tetap MoM CoC; MoM Weekly CR ESPPD Kamis dipilih dari daftar)
+  function upDefaultJenis() { var wd = (P(TODAY).getUTCDay() + 6) % 7; if (wd === 4) $("#upJenis").value = "crlayanan"; }
   $("#upTanggal").value = TODAY;
   (function () { var s = $("#upJenis"); JENIS.forEach(function (j) { var o = el("option", null, j.label); o.value = j.k; s.appendChild(o); }); })();
+  upDefaultJenis();
   $("#upFile").addEventListener("change", function () { var f = $("#upFile").files[0]; if (f && f.size > MAX_MB * 1048576) setUpMsg("bad", "File " + kbStr(f.size) + " melebihi batas " + MAX_MB + " MB."); else setUpMsg("", ""); });
   $("#ghForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
