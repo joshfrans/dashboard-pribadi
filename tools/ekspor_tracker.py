@@ -27,7 +27,8 @@ def muat(folder, nama):
 
 
 def tugas(d):
-    keep = ["title", "cat", "due", "time", "prio", "status", "progress", "routine", "doneAt", "cr", "viaEviden"]
+    keep = ["title", "cat", "due", "time", "prio", "status", "progress", "routine", "doneAt", "cr", "viaEviden",
+            "ditundaDari", "alasanTunda", "alasanBatal", "batalAt"]
     return {k: d.get(k) for k in keep if k in d}
 
 
@@ -56,6 +57,8 @@ def coc(d, lengkap):
         "jumlahCatatan": len(d.get("catatan") or []),
         "jumlahTindakLanjut": len(d.get("tindakLanjut") or []),
     }
+    if d.get("agenda"):  # CoC ditunda / dibatalkan: {"status": "Ditunda"|"Batal", "ke"?, "alasan"}
+        o["agenda"] = {k: d["agenda"].get(k) for k in ["status", "ke", "alasan"] if k in d["agenda"]}
     if ev.get("rekap"):
         o["evaluasi"]["slideRekap"] = ev["rekap"].get("slide")
     if lengkap:
