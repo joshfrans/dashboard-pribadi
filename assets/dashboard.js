@@ -713,7 +713,7 @@
     $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden dan tombol ✓ Selesai disimpan terenkripsi di repo, lalu disalin ke tracker privat oleh sinkron otomatis (06.30, 12.30, 17.30 WIB).";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
-  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); renderNotes(); }
+  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); renderNotes(); syncUpHint(); }
 
   // ---- data terenkripsi: kata sandi → PBKDF2 → AES-256-GCM (WebCrypto) ----
   var SKEY = "dse-pribadi:sandi";
@@ -891,11 +891,12 @@
   // eviden → tugas: pakai id yang tersimpan, atau turunkan dari jenis + tanggal (mom-YYYY-MM-DD, kpi4b-YYYY-MM, …)
   function evTask(x) { return x.tugas || taskIdFor(x.jenis, x.tanggal) || ""; }
   // tugas rutin dibuat ringkasan pagi di tracker setiap hari kerja; bila data dashboard belum diekspor ulang,
-  // buat padanannya di sini (id sama dengan tracker) agar eviden, tombol aksi, dan matriks rutin tetap jalan.
+  // buat padanannya di sini (id sama dengan tracker) sampai Jumat minggu berjalan, agar eviden (termasuk MoM Weekly CR
+  // hari Kamis/Jumat), tombol aksi, dan matriks rutin tetap jalan.
   function ensureRoutine(d) {
     var ex = d.meta && d.meta.diekspor ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date(d.meta.diekspor)) : addD(TODAY, -1);
     var CATR = { mom: "mom", rekap: "rekap", cresppd: "cr", crlayanan: "cr" };
-    for (var s = addD(ex, 1); s <= TODAY; s = addD(s, 1)) {
+    for (var s = addD(ex, 1), end = addD(monday(TODAY), 4); s <= end; s = addD(s, 1)) {
       var wd = (P(s).getUTCDay() + 6) % 7;
       ROUTINE.forEach(function (r) {
         var id = r.key + "-" + s;
@@ -1308,9 +1309,13 @@
     $("#upLocked").hidden = on; $("#upBtn").disabled = !on || uploading;
   }
   function syncUpHint() {
-    var jenis = $("#upJenis").value, tanggal = $("#upTanggal").value, id = taskIdFor(jenis, tanggal), t = id && BASE && BASE.tasks[id];
-    var h = $("#upHint");
-    h.textContent = t ? "Tugas terkait: “" + t.title + "” (" + (t.status === "done" ? "sudah selesai" : "akan ditandai selesai") + ")." : (jenisOf(jenis).tugas ? "Belum ada tugas " + jenisOf(jenis).label + " untuk tanggal ini; eviden tetap tersimpan." : "Eviden disimpan tanpa tugas terkait.");
+    var jenis = $("#upJenis").value, tanggal = $("#upTanggal").value, id = taskIdFor(jenis, tanggal), t = id && D.tasks && D.tasks[id];
+    var h = $("#upHint"), r = ROUTINE.filter(function (x) { return x.key === jenis; })[0];
+    var wd = tanggal ? (P(tanggal).getUTCDay() + 6) % 7 : -1, hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+    if (t) h.textContent = "Tugas terkait: “" + t.title + "” " + shortD(tanggal) + " (" + (t.status === "done" ? "sudah selesai" : "akan ditandai selesai") + ").";
+    else if (r && tanggal && r.days.indexOf(wd) < 0) h.textContent = jenisOf(jenis).label + " dijadwalkan " + (r.days.length > 1 ? hari[r.days[0]] + "–" + hari[r.days[r.days.length - 1]] : hari[r.days[0]]) + ". Periksa tanggalnya; eviden tetap tersimpan dan ditautkan ke tugas " + id + " bila tugas itu ada di tracker.";
+    else if (id) h.textContent = "Akan ditautkan ke tugas " + jenisOf(jenis).label + " " + (tanggal ? shortD(tanggal) : "") + " (id " + id + ") begitu tugas itu ada di tracker; eviden tetap tersimpan.";
+    else h.textContent = "Eviden disimpan tanpa tugas terkait.";
     $("#upKetL").textContent = jenis === "mom" || jenis === "rekap" ? "Bidang" : jenis === "cr" ? "Nama CR / dokumen" : "Keterangan";
   }
 
