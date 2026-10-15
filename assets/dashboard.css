@@ -803,3 +803,34 @@ a.ev-tag.lnk:hover{text-decoration:underline}
 .lock.tema .lock-card{box-shadow:0 24px 64px rgba(0,0,0,.35);border-color:transparent}
 .lock.tema .lock-mark{background:#ffd200;width:44px}
 @media print{.topbar.band{background:none;color:inherit;box-shadow:none}.note-btn{display:none!important}}
+
+/* v11: tunda / batal agenda */
+.cell[data-st=batal]{border-style:solid;border-color:var(--line);background:var(--sunk);color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.cell[data-st=moved]{border-style:dashed;border-color:var(--warn);background:transparent;color:var(--warn)}
+.matrix td .cell+.cell-act+.cell,.matrix td .cell+.cell{margin-top:6px}
+.btn.sm.jd-btn.has{color:var(--warn);border-color:var(--warn)}
+.jd-btn{display:inline-flex;align-items:center;gap:5px}
+.jd-btn .ico{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn.sm.xs.jd-btn{gap:3px;padding:0 6px}
+.pill.moved{background:var(--warn-soft);color:var(--warn)}
+.task.batal .ttl{color:var(--muted);text-decoration:line-through}
+.task.batal .dot{border-color:var(--line);background:var(--sunk)}
+.ev.is-batal{background:var(--sunk)}
+.ev.is-batal h3{color:var(--muted)}
+.ev.is-moved h3{color:var(--warn)}
+.ev-sub{margin:0;font-size:13px;color:var(--warn);font-weight:600}
+.jd-cur{padding:8px 12px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:14px;font-weight:600}
+.jd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:-4px}
+.jd-chip{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:0 12px;min-height:32px;font-size:13px}
+.jd-chip:hover{border-color:var(--accent)}
+.nd input[type=text]{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:10px 12px;font:inherit;font-size:15px}
+.jd-pair{display:flex;align-items:center;gap:8px;font-size:14px}
+.jd-pair input{width:18px;height:18px;accent-color:var(--accent)}
+.jd-pair[hidden]{display:none}
+.nd-act .jd-undo{margin-right:auto;color:var(--warn);border-color:var(--warn)}
+@media (max-width:620px){.nd-act{flex-wrap:wrap}.nd-act .jd-undo{flex:1 1 100%;margin-right:0}}
+.nf-li{display:block}
+.nf-li:first-child .nf-i{border-top:0}
+.nf-li+.nf-li .nf-i{border-top:1px solid var(--hair)}
+.card-h a{display:inline-flex;align-items:center;min-height:24px}
+.kbox2:focus-visible,.matrix-box:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
