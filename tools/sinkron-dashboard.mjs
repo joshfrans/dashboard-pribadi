@@ -7,7 +7,8 @@
 //   (opsional) DSE_SANDI=<kata sandi dashboard> untuk berkas lama format DSE1 / indeks lama.
 //
 // Keluaran: <folder>/sinkron.json  { indeks: "k2"|"sandi"|"tidak-terbaca"|"kosong", eviden: [...], status: {...}, ms: {"<idCR>::<milestone>": {...}},
-//           catatanKerja: [{ id, kunci, objek: "tugas"|"cr"|"milestone", tugas?, cr?, milestone?, judul, jenis: "progres"|"tl"|"kendala"|"info", teks, progres?, sampai?, at }] }
+//           catatanKerja: [{ id, kunci, objek: "tugas"|"cr"|"milestone", tugas?, cr?, milestone?, judul, jenis: "progres"|"tl"|"kendala"|"info", teks, progres?, sampai?, at }],
+//           jadwal: {"<idTugas>": { aksi: "tunda"|"batal", ke?, alasan, at, judul }} }
 //           <folder>/files/<id>.<ext>  berkas asli untuk eviden yang belum ada di --sudah (daftar id)
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { webcrypto as crypto } from "node:crypto";
@@ -56,7 +57,7 @@ async function bukaBerkas(u) {
 }
 
 mkdirSync(path.join(out, "files"), { recursive: true });
-const hasil = { repo, diambil: new Date().toISOString(), indeks: "kosong", eviden: [], status: {}, ms: {}, statusMode: "kosong", catatanKerja: [], catatan: [] };
+const hasil = { repo, diambil: new Date().toISOString(), indeks: "kosong", eviden: [], status: {}, ms: {}, statusMode: "kosong", catatanKerja: [], jadwal: {}, catatan: [] };
 
 const idx = await ambil("data/eviden.enc.json");
 if (idx) {
@@ -97,10 +98,12 @@ if (st) {
       }
     }
     hasil.catatanKerja.sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+    // agenda yang ditunda / dibatalkan dari tombol "Tunda/Batal"
+    hasil.jadwal = o.data.jadwal || {};
   }
   catch (e) { hasil.statusMode = "tidak-terbaca"; hasil.catatan.push("status tugas: " + (e.message || e)); }
 }
 writeFileSync(path.join(out, "sinkron.json"), JSON.stringify(hasil, null, 1) + "\n");
 const baru = hasil.eviden.filter(x => x.baru);
-console.log(`OK indeks=${hasil.indeks} · ${hasil.eviden.length} eviden (${baru.length} baru, ${baru.filter(x => x.galat).length} galat) · status=${hasil.statusMode} ${Object.keys(hasil.status).length} tugas · ${Object.keys(hasil.ms).length} milestone CR · ${hasil.catatanKerja.length} catatan`);
+console.log(`OK indeks=${hasil.indeks} · ${hasil.eviden.length} eviden (${baru.length} baru, ${baru.filter(x => x.galat).length} galat) · status=${hasil.statusMode} ${Object.keys(hasil.status).length} tugas · ${Object.keys(hasil.ms).length} milestone CR · ${hasil.catatanKerja.length} catatan · ${Object.keys(hasil.jadwal).length} agenda ditunda/batal`);
 for (const c of hasil.catatan) console.log("CATATAN:", c);
