@@ -14,9 +14,10 @@ catch (e) { console.error(`GALAT: ${path} bukan JSON valid — ${e.message}`); p
 if (data && data.format) {
   const e = [];
   // dse-aesgcm-v1: kunci dari kata sandi (PBKDF2). dse-k2-v1: kunci eviden acak 32 byte (indeks eviden & status tugas).
+  // dse-aesgcm-gz-v1: sama dengan dse-aesgcm-v1, isinya dikompres gzip sebelum dienkripsi.
   const k2 = data.format === "dse-k2-v1";
-  if (!["dse-aesgcm-v1", "dse-k2-v1"].includes(data.format)) e.push("format amplop tidak dikenal");
-  if (k2 && /tracker\.enc\.json$/.test(path)) e.push("tracker.enc.json harus memakai kata sandi (dse-aesgcm-v1)");
+  if (!["dse-aesgcm-v1", "dse-aesgcm-gz-v1", "dse-k2-v1"].includes(data.format)) e.push("format amplop tidak dikenal");
+  if (k2 && /tracker\.enc\.json$/.test(path)) e.push("tracker.enc.json harus memakai kata sandi (dse-aesgcm-v1 / dse-aesgcm-gz-v1)");
   if (!k2 && (data.kdf?.name !== "PBKDF2" || data.kdf?.hash !== "SHA-256" || !(data.kdf?.iter >= 300000))) e.push("KDF harus PBKDF2-SHA256 ≥ 300.000 iterasi");
   const b = s => typeof s === "string" && /^[A-Za-z0-9+/]+=*$/.test(s);
   if (!k2 && (!b(data.kdf?.salt) || Buffer.from(data.kdf.salt, "base64").length < 16)) e.push("salt harus ≥ 16 byte");
@@ -45,7 +46,7 @@ if (isObj(data.meta)) {
 for (const [id, t] of Object.entries(data.tasks || {})) {
   if (!t.title) errors.push(`tasks/${id}: title kosong`);
   if (!tgl.test(t.due || "")) errors.push(`tasks/${id}: due bukan YYYY-MM-DD`);
-  if (!["todo", "doing", "done"].includes(t.status)) errors.push(`tasks/${id}: status tidak dikenal (${t.status})`);
+  if (!["todo", "doing", "done", "batal"].includes(t.status)) errors.push(`tasks/${id}: status tidak dikenal (${t.status})`);
 }
 for (const [id, c] of Object.entries(data.cr || {})) {
   if (!c.nama) errors.push(`cr/${id}: nama kosong`);
