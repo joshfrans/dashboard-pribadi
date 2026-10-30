@@ -834,3 +834,29 @@ a.ev-tag.lnk:hover{text-decoration:underline}
 .nf-li+.nf-li .nf-i{border-top:1px solid var(--hair)}
 .card-h a{display:inline-flex;align-items:center;min-height:24px}
 .kbox2:focus-visible,.matrix-box:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* v13: arsip eviden */
+.evt td.act .del{margin-left:6px;min-height:32px;padding:0 10px;font-size:13px}
+.card-h .del-all{margin-left:auto;color:var(--bad);border-color:var(--bad)}
+.card-h .del-all.arm{background:var(--bad);color:var(--surface)}
+.card-h .del-all+.btn{margin-left:8px}
+.fname .pill{vertical-align:middle}
+.evt td.m{width:1%;white-space:nowrap}
+@media (max-width:760px){
+  table.evt{min-width:0}
+  .evt thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .evt,.evt tbody,.evt tr,.evt td{display:block}
+  .evt tr{display:grid;grid-template-columns:1fr auto;align-items:start;gap:6px 10px;padding:12px 4px;border-bottom:1px solid var(--line)}
+  .evt tr:last-child{border-bottom:0}
+  .evt td,.kpi.evt td{padding:0;border:0;width:auto}
+  .evt td:nth-child(2){justify-self:end}
+  .evt td:nth-child(3),.evt td:nth-child(4),.evt td.act{grid-column:1/-1}
+  .evt td:nth-child(3){color:var(--muted)}
+  .evt td.act{display:flex;flex-wrap:wrap;gap:6px;white-space:normal}
+  .evt td.act .btn+.btn,.evt td.act .del{margin-left:0}
+  .evt td.empty{grid-column:1/-1}
+}
+/* v13: target sentuh minimal 24px untuk tautan mandiri (WCAG 2.5.8) */
+a.more{display:inline-flex;align-items:center;min-height:24px}
+.kal-src a{display:inline-flex;align-items:center;min-height:24px}
+.kev a.kttl{display:inline-block;min-height:24px;padding-top:2px}
+@media (max-width:760px){.card-h #evRefresh{margin-left:auto}}
