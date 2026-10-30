@@ -1,6 +1,7 @@
 /* Dashboard Pribadi Strategi & Evaluasi — GitHub Pages, data terenkripsi (AES-256-GCM) (view: ringkasan, rutin, CR, CoC, KPI 4b, tugas).
    v10: tombol Catatan (progres · tindak lanjut · kendala · info) di setiap aksi, disimpan terenkripsi di data/status.enc.json.
    v11: Tunda/Batal agenda (CoC & tugas) · terlambat ikut jam tenggat · sinkron multi-perangkat · perbaikan aksesibilitas.
+   v12: galat render tidak lagi menggagalkan unggah/simpan (sebelumnya tampil "Koneksi ke GitHub gagal") · cegah unggah ganda.
    Sumber data: data/tracker.enc.json (ekspor tracker claude.ai → tools/ekspor_tracker.py → tools/enkripsi-data.mjs).
    Semua teks dari data ditulis dengan textContent; tidak ada innerHTML berisi data. */
 (function () {
@@ -321,7 +322,7 @@
     // beban 10 hari kerja ke depan
     var days = [], d = TODAY; if ([0, 6].indexOf(P(d).getUTCDay()) >= 0) d = nextWork(d);
     while (days.length < 10) { days.push(d); d = nextWork(d); }
-    var cnt = days.map(function (x) { return all.filter(function (t) { return t.due === x && t.status !== "done"; }).length; }), mx = Math.max.apply(null, cnt.concat([1]));
+    var cnt = days.map(function (x) { return all.filter(function (t) { return t.due === x && t.status !== "done"; }).length; }), mx0 = Math.max.apply(null, cnt), mx = Math.max(mx0, 1);
     var lc = $("#loadChart"); clear(lc);
     days.forEach(function (x, i) {
       var col = el("div", "lcol" + (cnt[i] === mx && mx > 0 ? " peak" : "") + (x === TODAY ? " today" : "")), bar = el("div", "lbar"), f = el("b");
@@ -330,8 +331,8 @@
       tipOn(col, fmt(x, { weekday: "long", day: "numeric", month: "short" }) + ": " + cnt[i] + " tugas belum selesai");
       lc.appendChild(col);
     });
-    var pk = days[cnt.indexOf(mx)];
-    $("#loadNote").textContent = mx > 0 ? "Hari terpadat: " + fmt(pk, { weekday: "long", day: "numeric", month: "short" }) + " dengan " + mx + " tugas. Total " + cnt.reduce(function (a, b) { return a + b; }, 0) + " tugas terbuka dalam 10 hari kerja." : "Tidak ada tugas terbuka dalam 10 hari kerja ke depan.";
+    var pk = mx0 > 0 ? days[cnt.indexOf(mx0)] : null;
+    $("#loadNote").textContent = pk ? "Hari terpadat: " + fmt(pk, { weekday: "long", day: "numeric", month: "short" }) + " dengan " + mx + " tugas. Total " + cnt.reduce(function (a, b) { return a + b; }, 0) + " tugas terbuka dalam 10 hari kerja." : "Tidak ada tugas terbuka dalam 10 hari kerja ke depan.";
 
     // tren tepat waktu per minggu
     var tb = $("#otTrend"); clear(tb);
@@ -739,7 +740,14 @@
     $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden dan tombol ✓ Selesai disimpan terenkripsi di repo, lalu disalin ke tracker privat oleh sinkron otomatis (06.30, 12.30, 17.30 WIB).";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
-  function renderAll() { renderOverview(); renderKinerja(); navBadges(); renderMatrix(); renderTrend(); renderCR(); renderEvidence(); renderKPI(); renderList(); renderKalender(); renderEvidenView(); renderNotes(); syncUpHint(); }
+  // setiap panel dirender terpisah: galat di satu panel dicatat di konsol, panel lain dan proses simpan tetap jalan
+  var renderErr = null;
+  function renderAll() {
+    renderErr = null;
+    [renderOverview, renderKinerja, navBadges, renderMatrix, renderTrend, renderCR, renderEvidence, renderKPI, renderList, renderKalender, renderEvidenView, renderNotes, syncUpHint].forEach(function (fn) {
+      try { fn(); } catch (e) { renderErr = e; if (window.console) console.error("[dashboard] " + (fn.name || "render") + ":", e); }
+    });
+  }
 
   // ---- data terenkripsi: kata sandi → PBKDF2 → AES-256-GCM (WebCrypto) ----
   var SKEY = "dse-pribadi:sandi";
@@ -881,7 +889,8 @@
   }
   function ghErr(r) { var e = new Error("GitHub " + r.status); e.status = r.status; return e; }
   function ghMsg(e) {
-    if (!e || !e.status) return "Koneksi ke GitHub gagal. Periksa internet lalu coba lagi.";
+    if (!e || (!e.status && (e.name === "TypeError" && /fetch|network|load/i.test(e.message || "")))) return "Koneksi ke GitHub gagal. Periksa internet lalu coba lagi.";
+    if (!e.status) return "Galat di dashboard (" + (e.message || e) + "). Muat ulang halaman lalu cek arsip sebelum mengulang.";
     if (e.status === 401) return "Token GitHub tidak berlaku (kedaluwarsa atau dicabut). Buat token baru di Koneksi GitHub.";
     if (e.status === 403 || e.status === 404) return "Token tidak punya izin tulis ke repo " + REPO.repo + ". Pastikan izin Contents: Read and write.";
     if (e.status === 409 || e.status === 422) return "File di repo baru saja berubah. Coba unggah lagi.";
@@ -939,6 +948,9 @@
     }
   }
   function rebuild() {
+    try { rebuild0(); } catch (e) { if (window.console) console.error("[dashboard] rebuild:", e); }
+  }
+  function rebuild0() {
     if (!BASE) return;
     var d = JSON.parse(JSON.stringify(BASE));
     d.evidenList = (EV.eviden || []).slice().sort(function (a, b) { return (b.tanggal + b.diunggah).localeCompare(a.tanggal + a.diunggah); });
@@ -954,7 +966,7 @@
   }
 
   // --- unggah ---
-  var uploading = false;
+  var uploading = false, dupOk = null;
   function setUpMsg(cls, txt) { var m = $("#upMsg"); m.hidden = !txt; m.className = "up-msg " + (cls || ""); m.textContent = txt || ""; }
   function doUpload(ev) {
     ev.preventDefault();
@@ -964,6 +976,9 @@
     if (!f) { setUpMsg("bad", "Pilih file eviden."); return; }
     if (!tanggal) { setUpMsg("bad", "Isi tanggal eviden."); return; }
     if (f.size > MAX_MB * 1048576) { setUpMsg("bad", "File " + kbStr(f.size) + " melebihi batas " + MAX_MB + " MB. Kompres PDF-nya dulu."); return; }
+    var dup = (EV.eviden || []).filter(function (x) { return x.jenis === jenis && x.tanggal === tanggal && x.nama === f.name; })[0], dk = jenis + "|" + tanggal + "|" + f.name + "|" + f.size;
+    if (dup && dupOk !== dk) { dupOk = dk; setUpMsg("bad", "File “" + f.name + "” untuk " + shortD(tanggal) + " sudah ada di arsip (diunggah " + fmtDT(dup.diunggah) + "). Tekan Unggah sekali lagi bila memang ingin mengunggah ulang."); return; }
+    dupOk = null;
     var id = tanggal.replace(/-/g, "") + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
     var path = "eviden/" + tanggal.slice(0, 4) + "/" + tanggal.slice(5, 7) + "/" + id + ".bin";
     var tugas = taskIdFor(jenis, tanggal);
