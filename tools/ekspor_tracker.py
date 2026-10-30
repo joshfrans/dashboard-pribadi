@@ -67,7 +67,7 @@ def coc(d, lengkap):
         if ev.get("rekap", {}).get("deck"):
             o["evaluasi"]["deck"] = ev["rekap"]["deck"]
         o["komitmen"] = [{k: r.get(k) for k in ["no", "kelompok", "lingkup", "posisi", "target", "status", "langkah"]} for r in kom]
-        o["tindakLanjut"] = d.get("tindakLanjut") or []
+        # tindakLanjut tidak ditampilkan dashboard (cukup jumlahTindakLanjut) → tidak diekspor agar data lebih ringan
         o["catatan"] = d.get("catatan") or []
         if ev.get("rekomendasi"):
             o["evaluasi"]["rekomendasi"] = ev["rekomendasi"]
