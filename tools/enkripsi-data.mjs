@@ -2,10 +2,12 @@
 // Pakai:
 //   DSE_SANDI='kata sandi' node tools/enkripsi-data.mjs <tracker.json polos> data/tracker.enc.json
 //   DSE_SANDI='kata sandi' node tools/enkripsi-data.mjs --buka data/tracker.enc.json   (cek dekripsi)
+//   Bawaan: JSON dikompres gzip lalu dienkripsi (format dse-aesgcm-gz-v1). Tambah --tanpa-gzip untuk format lama.
 // Kata sandi dibaca dari variabel lingkungan DSE_SANDI agar tidak tersimpan di riwayat shell.
 // File polos JANGAN di-commit (sudah ada di .gitignore).
 import { readFileSync, writeFileSync } from "node:fs";
 import { webcrypto as crypto } from "node:crypto";
+import { gzipSync, gunzipSync } from "node:zlib";
 
 const ITER = 600000;
 const sandi = process.env.DSE_SANDI;
@@ -25,7 +27,7 @@ if (process.argv[2] === "--buka") {
   let pt;
   try { pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(env.iv), additionalData: enc.encode(env.format) }, k, unb64(env.ct)); }
   catch { console.error("GAGAL: kata sandi salah atau file rusak."); process.exit(1); }
-  const data = JSON.parse(dec.decode(pt));
+  const data = JSON.parse(env.format === "dse-aesgcm-gz-v1" ? gunzipSync(Buffer.from(pt)).toString("utf8") : dec.decode(pt));
   console.log(`OK dekripsi · profil ${data.meta.profil} · diekspor ${data.meta.diekspor} · ${Object.keys(data.tasks).length} tugas`);
   process.exit(0);
 }
@@ -35,8 +37,11 @@ if (!src || !dst) { console.error("Pakai: node tools/enkripsi-data.mjs <polos.js
 const polos = readFileSync(src, "utf8");
 const data = JSON.parse(polos);
 const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
-const format = "dse-aesgcm-v1";
-const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(format) }, await kunci(salt, ITER), enc.encode(polos)));
+// bawaan: kompres gzip lalu enkripsi (format dse-aesgcm-gz-v1); --tanpa-gzip untuk format lama dse-aesgcm-v1
+const gz = !process.argv.includes("--tanpa-gzip");
+const format = gz ? "dse-aesgcm-gz-v1" : "dse-aesgcm-v1";
+const isi = gz ? gzipSync(Buffer.from(JSON.stringify(data)), { level: 9 }) : enc.encode(polos);
+const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(format) }, await kunci(salt, ITER), isi));
 const env = { format, kdf: { name: "PBKDF2", hash: "SHA-256", iter: ITER, salt: b64(salt) }, cipher: "AES-256-GCM", iv: b64(iv), ct: b64(ct) };
 writeFileSync(dst, JSON.stringify(env) + "\n");
 console.log(`OK ${dst} · ${ct.length} byte terenkripsi · profil ${data.meta?.profil}`);
