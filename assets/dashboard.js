@@ -2,6 +2,7 @@
    v10: tombol Catatan (progres · tindak lanjut · kendala · info) di setiap aksi, disimpan terenkripsi di data/status.enc.json.
    v11: Tunda/Batal agenda (CoC & tugas) · terlambat ikut jam tenggat · sinkron multi-perangkat · perbaikan aksesibilitas.
    v12: galat render tidak lagi menggagalkan unggah/simpan (sebelumnya tampil "Koneksi ke GitHub gagal") · cegah unggah ganda.
+   v13: arsip eviden: penanda duplikat, tombol Hapus (2 langkah) dan "Rapikan duplikat" · arsip berbentuk kartu di HP · data dashboard terkompres (gzip) sebelum dienkripsi.
    Sumber data: data/tracker.enc.json (ekspor tracker claude.ai → tools/ekspor_tracker.py → tools/enkripsi-data.mjs).
    Semua teks dari data ditulis dengan textContent; tidak ada innerHTML berisi data. */
 (function () {
@@ -766,10 +767,15 @@
     return keyCache[id];
   }
   function decrypt(pw, e) {
-    if (!e || e.format !== "dse-aesgcm-v1" || !e.kdf || !e.iv || !e.ct) return Promise.reject(new Error("format"));
+    // dse-aesgcm-gz-v1 = isi JSON dikompres gzip sebelum dienkripsi (data dashboard ±5× lebih kecil)
+    if (!e || (e.format !== "dse-aesgcm-v1" && e.format !== "dse-aesgcm-gz-v1") || !e.kdf || !e.iv || !e.ct) return Promise.reject(new Error("format"));
     return deriveKey(pw, e).then(function (k) {
       return crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(e.iv), additionalData: new TextEncoder().encode(e.format) }, k, unb64(e.ct));
-    }).then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+    }).then(function (buf) {
+      if (e.format !== "dse-aesgcm-gz-v1") return JSON.parse(new TextDecoder().decode(buf));
+      if (typeof DecompressionStream === "undefined") throw new Error("Browser ini belum mendukung data terkompres. Perbarui browser.");
+      return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(JSON.parse);
+    });
   }
   function lock(msg) {
     sandi = null; keyCache = {}; D = { meta: {}, tasks: {}, cr: {}, coc: {}, kpi: {} }; loaded = false; BASE = null; TOKEN = null; ghInfo = null; EV = { skema: 1, eviden: [] }; ACT = { skema: 1, status: {} };
@@ -886,6 +892,9 @@
   function ghPut(path, b64content, message, sha) {
     var body = { message: message, content: b64content, branch: "main" }; if (sha) body.sha = sha;
     return gh("PUT", "/contents/" + path, body).then(function (r) { if (!r.ok) throw ghErr(r); return r.json(); });
+  }
+  function ghDelete(path, message) {
+    return ghGet(path).then(function (j) { if (!j) return null; return gh("DELETE", "/contents/" + path, { message: message, sha: j.sha, branch: "main" }).then(function (r) { if (!r.ok && r.status !== 404) throw ghErr(r); return r; }); });
   }
   function ghErr(r) { var e = new Error("GitHub " + r.status); e.status = r.status; return e; }
   function ghMsg(e) {
@@ -1495,21 +1504,49 @@
     var box = $("#evList"); if (!box) return; clear(box);
     renderGh();
     var list = D.evidenList || [];
-    $("#evCount").textContent = list.length + " eviden";
+    var dups = evDups(list);
+    $("#evCount").textContent = list.length + " eviden" + (dups.length ? " · " + dups.length + " duplikat" : "");
+    var tidy = $("#evTidy"); if (tidy) { tidy.hidden = !(dups.length && TOKEN); tidy.textContent = "Rapikan duplikat (" + dups.length + ")"; }
     if (!list.length) { var tr0 = el("tr"), td0 = el("td", "empty", loaded ? "Belum ada eviden yang diunggah dari dashboard." : "Memuat…"); td0.colSpan = 6; tr0.appendChild(td0); box.appendChild(tr0); return; }
     list.forEach(function (x) {
       var tr = el("tr");
       tr.appendChild(el("td", "m", shortD(x.tanggal)));
       var j = el("td"); j.appendChild(el("span", "pill " + (x.jenis === "kpi4b" ? "kpi" : x.jenis === "cresppd" || x.jenis === "crlayanan" || x.jenis === "cr" ? "cr" : x.jenis === "mom" ? "mom" : x.jenis === "rekap" ? "rekap" : "lain"), jenisOf(x.jenis).label)); tr.appendChild(j);
       tr.appendChild(el("td", null, x.ket || "–"));
-      var fn = el("td"); fn.appendChild(el("div", "fname", x.nama)); fn.appendChild(el("span", "sub", kbStr(x.ukuran || 0) + " · diunggah " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(x.diunggah)))); tr.appendChild(fn);
+      var fn = el("td"), fnm = el("div", "fname", x.nama); if (dups.indexOf(x.id) >= 0) { fnm.appendChild(document.createTextNode(" ")); fnm.appendChild(el("span", "pill moved", "duplikat")); } fn.appendChild(fnm); fn.appendChild(el("span", "sub", kbStr(x.ukuran || 0) + " · diunggah " + new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(x.diunggah)))); tr.appendChild(fn);
       var tk = el("td"), t = D.tasks[evTask(x)];
       tk.appendChild(t ? el("span", "chip s-done", "Tugas selesai") : el("span", "sub", "–")); tr.appendChild(tk);
       var ac = el("td", "act"), b1 = el("button", "btn", "Buka"), b2 = el("button", "btn", "Unduh");
       b1.type = b2.type = "button"; b1.addEventListener("click", function () { openEviden(x, false); }); b2.addEventListener("click", function () { openEviden(x, true); });
-      ac.appendChild(b1); ac.appendChild(b2); tr.appendChild(ac);
+      ac.appendChild(b1); ac.appendChild(b2);
+      if (TOKEN) { var b3 = el("button", "del", "Hapus"); b3.type = "button"; b3.setAttribute("aria-label", "Hapus eviden " + x.nama + " (" + shortD(x.tanggal) + ")"); b3.addEventListener("click", function () { armDel(b3, function () { removeEviden([x], "Hapus eviden " + x.nama); }); }); ac.appendChild(b3); }
+      tr.appendChild(ac);
       box.appendChild(tr);
     });
+  }
+
+  // eviden ganda: jenis + tanggal + nama + ukuran sama → yang diunggah lebih awal dipertahankan
+  function evDups(list) {
+    var seen = {}, out = [];
+    list.slice().sort(function (a, b) { return (a.diunggah || "").localeCompare(b.diunggah || ""); }).forEach(function (x) {
+      var k = [x.jenis, x.tanggal, x.nama, x.ukuran].join("|"); if (seen[k]) out.push(x.id); else seen[k] = 1;
+    });
+    return out;
+  }
+  // tombol hapus dua langkah: klik pertama "Yakin?", klik kedua dalam 5 detik menjalankan
+  function armDel(b, fn) {
+    if (b.classList.contains("arm")) { b.classList.remove("arm"); clearTimeout(b._t); b.disabled = true; fn(); return; }
+    b._lbl = b._lbl || b.textContent; b.classList.add("arm"); b.textContent = "Yakin hapus?";
+    b._t = setTimeout(function () { b.classList.remove("arm"); b.textContent = b._lbl; }, 5000);
+  }
+  function removeEviden(items, msg) {
+    if (!TOKEN) { toast("Hubungkan GitHub dulu agar eviden bisa dihapus.", "bad"); return; }
+    var ids = items.map(function (x) { return x.id; }), m = $("#evListMsg");
+    m.hidden = false; m.className = "up-msg"; m.textContent = "Menghapus " + ids.length + " eviden…";
+    saveIndex(function (o) { o.eviden = o.eviden.filter(function (x) { return ids.indexOf(x.id) < 0; }); return o; }, 0)
+      .then(function () { return items.reduce(function (p, x) { return p.then(function () { return x.path ? ghDelete(x.path, msg + " (" + x.id + ")").catch(function () { }) : null; }); }, Promise.resolve()); })
+      .then(function () { m.className = "up-msg ok"; m.textContent = "✓ " + ids.length + " eviden dihapus dari arsip. Salinan yang sudah masuk tracker tidak ikut terhapus."; toast("✓ " + ids.length + " eviden dihapus.", "ok"); })
+      .catch(function (e) { m.className = "up-msg bad"; m.textContent = "! Eviden belum terhapus: " + ghMsg(e); renderEvidenView(); });
   }
 
   // --- Google Calendar ---
@@ -1666,6 +1703,7 @@
   $("#navMore").addEventListener("click", function () { var n = $(".nav"), o = !n.classList.contains("more"); n.classList.toggle("more", o); this.setAttribute("aria-expanded", String(o)); });
   document.querySelectorAll(".nav a").forEach(function (a) { a.addEventListener("click", function () { $(".nav").classList.remove("more"); $("#navMore").setAttribute("aria-expanded", "false"); }); });
   $("#evRefresh").addEventListener("click", function () { evLoad(); actLoad(); });
+  if ($("#evTidy")) $("#evTidy").addEventListener("click", function () { var b = this, ids = evDups(D.evidenList || []); if (!ids.length) return; armDel(b, function () { removeEviden((D.evidenList || []).filter(function (x) { return ids.indexOf(x.id) >= 0; }), "Rapikan eviden ganda"); setTimeout(function () { b.disabled = false; }, 1500); }); });
 
   function load() {
     return fetch(DATA_URL, { cache: "no-cache" }).then(function (r) {
