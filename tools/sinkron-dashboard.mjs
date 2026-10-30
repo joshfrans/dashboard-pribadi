@@ -11,6 +11,7 @@
 //           jadwal: {"<idTugas>": { aksi: "tunda"|"batal", ke?, alasan, at, judul }} }
 //           <folder>/files/<id>.<ext>  berkas asli untuk eviden yang belum ada di --sudah (daftar id)
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { webcrypto as crypto } from "node:crypto";
 import path from "node:path";
 
@@ -43,9 +44,10 @@ async function bukaJSON(buf) {
   const e = JSON.parse(buf.toString("utf8"));
   const iv = Buffer.from(e.iv, "base64"), ct = Buffer.from(e.ct, "base64");
   if (e.format === "dse-k2-v1") return { mode: "k2", data: JSON.parse(Buffer.from(await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: te.encode(e.format) }, await k2, ct)).toString("utf8")) };
-  if (e.format === "dse-aesgcm-v1") {
+  if (e.format === "dse-aesgcm-v1" || e.format === "dse-aesgcm-gz-v1") {
     const k = await pwKey(Buffer.from(e.kdf.salt, "base64"), e.kdf.iter);
-    return { mode: "sandi", data: JSON.parse(Buffer.from(await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: te.encode(e.format) }, k, ct)).toString("utf8")) };
+    const b = Buffer.from(await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: te.encode(e.format) }, k, ct));
+    return { mode: "sandi", data: JSON.parse((e.format === "dse-aesgcm-gz-v1" ? gunzipSync(b) : b).toString("utf8")) };
   }
   throw new Error("format amplop tidak dikenal: " + e.format);
 }
