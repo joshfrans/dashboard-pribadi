@@ -3,6 +3,7 @@
    v11: Tunda/Batal agenda (CoC & tugas) · terlambat ikut jam tenggat · sinkron multi-perangkat · perbaikan aksesibilitas.
    v12: galat render tidak lagi menggagalkan unggah/simpan (sebelumnya tampil "Koneksi ke GitHub gagal") · cegah unggah ganda.
    v13: arsip eviden: penanda duplikat, tombol Hapus (2 langkah) dan "Rapikan duplikat" · arsip berbentuk kartu di HP · data dashboard terkompres (gzip) sebelum dienkripsi.
+   v14: tugas rutin "Evaluasi rekapitulasi CoC" dihentikan sejak 18 Nov 2026 (tidak dibuat, tidak ditampilkan, tidak dihitung).
    Sumber data: data/tracker.enc.json (ekspor tracker claude.ai → tools/ekspor_tracker.py → tools/enkripsi-data.mjs).
    Semua teks dari data ditulis dengan textContent; tidak ada innerHTML berisi data. */
 (function () {
@@ -13,11 +14,14 @@
   var CAT = { mom: "MoM CoC", rekap: "Rekap CoC", cr: "Weekly CR", kpi: "KPI / RKM", dashboard: "Dashboard", lain: "Lainnya" };
   var ROUTINE = [
     { key: "mom", title: "Evaluasi MoM CoC tiap bidang", sub: "Sen–Kam · skill MoM PLN", days: [0, 1, 2, 3] },
-    { key: "rekap", title: "Evaluasi rekapitulasi CoC tiap bidang", sub: "Sen–Kam · skill evaluasi & assessment", days: [0, 1, 2, 3] },
+    // dihentikan sejak 18 Nov 2026: tugas rekap bertanggal setelah "until" tidak dibuat dan tidak ditampilkan
+    { key: "rekap", title: "Evaluasi rekapitulasi CoC tiap bidang", sub: "Sen–Kam · dihentikan sejak 18 Nov 2026", days: [0, 1, 2, 3], until: "2026-11-17" },
     { key: "cresppd", title: "Weekly CR ESPPD Re-Engineering + MoM", sub: "Kamis 09.00 · MoM paling lambat 16.00", days: [3] },
     { key: "crlayanan", title: "Weekly CR Aplikasi Layanan GA + MoM", sub: "Jumat 09.30 · MoM paling lambat 16.00", days: [4] }
   ];
   var DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum"];
+  function aktif(r, d) { return !r.until || d <= r.until; }
+  function rutinOf(key) { return ROUTINE.filter(function (r) { return r.key === key; })[0]; }
   var ST = [
     { k: "Selesai", v: "--st-selesai", i: "--ink-selesai" }, { k: "Maju", v: "--st-maju", i: "--ink-maju" }, { k: "Sebagian", v: "--st-sebagian", i: "--ink-sebagian" },
     { k: "Tetap", v: "--st-tetap", i: "--ink-tetap" }, { k: "Mundur", v: "--st-mundur", i: "--ink-mundur" }, { k: "Tidak dilaporkan", v: "--st-td", i: "--ink-td" }, { k: "Baru", v: "--st-baru", i: "--ink-baru" }
@@ -405,14 +409,15 @@
     $("#weekLbl").textContent = fmt(weekStart, { day: "numeric", month: "short" }) + " – " + fmt(addD(weekStart, 4), { day: "numeric", month: "short", year: "numeric" });
     var body = $("#mBody"); clear(body);
     ROUTINE.forEach(function (r) {
+      if (!aktif(r, weekStart)) return;
       var tr = el("tr");
       var th = el("th", null, r.title); th.scope = "row"; th.appendChild(el("small", null, r.sub)); tr.appendChild(th);
       days.forEach(function (d, i) {
         var dl = DAYS[i] + " " + fmt(d, { day: "numeric" });
         var id = r.key + "-" + d, t = D.tasks[id], bt = D.batal && D.batal[id], away = t && t.due !== d;
         var ins = ((D.pindah || {})[r.key + "@" + d] || []).filter(function (x) { return x !== id; }).map(taskOf).filter(Boolean);
-        if (r.days.indexOf(i) < 0 && !ins.length) { var na = el("td", "na" + (d === TODAY ? " is-today" : ""), "—"); na.dataset.day = dl; na.setAttribute("aria-label", "Tidak dijadwalkan"); tr.appendChild(na); return; }
-        if (r.days.indexOf(i) < 0) { t = null; bt = null; away = false; }
+        if ((r.days.indexOf(i) < 0 || !aktif(r, d)) && !ins.length) { var na = el("td", "na" + (d === TODAY ? " is-today" : ""), "—"); na.dataset.day = dl; na.setAttribute("aria-label", "Tidak dijadwalkan"); tr.appendChild(na); return; }
+        if (r.days.indexOf(i) < 0 || !aktif(r, d)) { t = null; bt = null; away = false; }
         var td = el("td", d === TODAY ? "is-today" : null); td.dataset.day = dl;
         if (bt) cellItem(td, "batal", "Batal", r.title + " " + shortD(d) + ": dibatalkan" + (bt.jadwal.alasan ? " — " + bt.jadwal.alasan : ""), function (ca) { jadwalBtn(id, ca, true); noteBtn(kTask(id), ca, true); });
         else if (away) cellItem(td, "moved", "→ " + fmt(t.due, { weekday: "short", day: "numeric" }), r.title + " " + shortD(d) + ": ditunda ke " + shortD(t.due) + (t.jadwal && t.jadwal.alasan ? " — " + t.jadwal.alasan : ""), function (ca) { jadwalBtn(id, ca, true); noteBtn(kTask(id), ca, true); });
@@ -538,7 +543,7 @@
       else if (ups.length) upCard(card, ups);
       else {
         card.appendChild(el("h3", null, "Belum ada eviden"));
-        card.appendChild(el("p", "muted", d > TODAY ? "Jadwal CoC mendatang." : "MoM dan rekap belum masuk tracker."));
+        card.appendChild(el("p", "muted", d > TODAY ? "Jadwal CoC mendatang." : (aktif(rutinOf("rekap"), d) ? "MoM dan rekap belum masuk tracker." : "MoM belum masuk tracker.")));
       }
       ins.forEach(function (x) { var u = D.tasks[x]; if (u) card.appendChild(el("p", "ev-sub", "CoC pengganti dari " + shortD(u.ditundaDari) + " juga jatuh hari ini" + (u.jadwal && u.jadwal.alasan ? " (" + u.jadwal.alasan + ")" : "") + ".")); });
       var ea = el("div", "ev-act");
@@ -809,7 +814,7 @@
   var MAX_MB = 20;
   var JENIS = [
     { k: "mom", label: "MoM CoC", tugas: "mom-", per: "hari" },
-    { k: "rekap", label: "Rekap CoC", tugas: "rekap-", per: "hari" },
+    { k: "rekap", label: "Rekap CoC", tugas: "rekap-", per: "hari", arsip: true },   // arsip saja: tidak lagi dipilih saat unggah (dihentikan 18 Nov 2026)
     { k: "cresppd", label: "MoM Weekly CR ESPPD Re-Engineering", tugas: "cresppd-", per: "hari" },
     { k: "crlayanan", label: "MoM Weekly CR Aplikasi Layanan GA", tugas: "crlayanan-", per: "hari" },
     { k: "kpi4b", label: "Eviden KPI 4b", tugas: "kpi4b-", per: "bulan" },
@@ -951,10 +956,17 @@
       var wd = (P(s).getUTCDay() + 6) % 7;
       ROUTINE.forEach(function (r) {
         var id = r.key + "-" + s;
-        if (r.days.indexOf(wd) < 0 || d.tasks[id]) return;
+        if (r.days.indexOf(wd) < 0 || d.tasks[id] || !aktif(r, s)) return;
         d.tasks[id] = { title: r.title, cat: CATR[r.key] || "lain", due: s, time: "16:00", prio: "normal", status: "todo", progress: 0, routine: true, doneAt: null, sintetis: true };
       });
     }
+  }
+  // buang tugas rutin yang sudah dihentikan (mis. rekap-YYYY-MM-DD setelah 17 Nov 2026), termasuk yang terlanjur dibuat di tracker
+  function pruneEnded(d) {
+    ROUTINE.forEach(function (r) {
+      if (!r.until) return;
+      Object.keys(d.tasks).forEach(function (id) { var dt = /^(.*)-(\d{4}-\d{2}-\d{2})$/.exec(id); if (dt && dt[1] === r.key && dt[2] > r.until) delete d.tasks[id]; });
+    });
   }
   function rebuild() {
     try { rebuild0(); } catch (e) { if (window.console) console.error("[dashboard] rebuild:", e); }
@@ -964,6 +976,7 @@
     var d = JSON.parse(JSON.stringify(BASE));
     d.evidenList = (EV.eviden || []).slice().sort(function (a, b) { return (b.tanggal + b.diunggah).localeCompare(a.tanggal + a.diunggah); });
     ensureRoutine(d);
+    pruneEnded(d);
     applyJadwal(d);
     d.evidenList.forEach(function (x) {
       var t = d.tasks[evTask(x, d.tasks)];
@@ -1351,7 +1364,7 @@
   var jDlg = null, jCtx = null, ALASAN = ["Pimpinan berhalangan", "Bentrok agenda lain", "Libur / cuti bersama", "Bidang belum siap materi", "Rapat digabung"];
   function dateOfId(id) { var m = /(\d{4}-\d{2}-\d{2})$/.exec(id || ""); return m ? m[1] : null; }
   function keyOfId(id) { return (id || "").replace(/-\d{4}-\d{2}-\d{2}$/, ""); }
-  function pairIds(id) { var d = dateOfId(id), k = keyOfId(id); return (k === "mom" || k === "rekap") && d ? ["mom-" + d, "rekap-" + d] : [id]; }
+  function pairIds(id) { var d = dateOfId(id), k = keyOfId(id); return (k === "mom" || k === "rekap") && d ? (aktif(rutinOf("rekap"), d) ? ["mom-" + d, "rekap-" + d] : ["mom-" + d]) : [id]; }
   function applyJadwal(d) {
     d.batal = {}; d.pindah = {};
     // dari tracker (sudah tersinkron): status "batal"
@@ -1400,7 +1413,7 @@
     [["tunda", "Ditunda (jadwal ulang)"], ["batal", "Dibatalkan"]].forEach(function (a, i) { var lb = el("label"), r = el("input"); r.type = "radio"; r.name = "jdAksi"; r.value = a[0]; if (!i) r.checked = true; r.addEventListener("change", syncJd); lb.appendChild(r); lb.appendChild(el("span", "nj-" + (a[0] === "tunda" ? "tl" : "kendala"), a[1])); fs.appendChild(lb); });
     f.appendChild(fs);
     var dw = el("div", "nd-f"); dw.id = "jdKeWrap"; var dl = el("label", "nd-l", "Tanggal pengganti"); dl.htmlFor = "jdKe"; dw.appendChild(dl);
-    var di = el("input"); di.id = "jdKe"; di.type = "date"; dw.appendChild(di); dw.appendChild(el("small", "sub", "tenggat MoM/rekap ikut pindah ke tanggal ini, pukul 16.00")); f.appendChild(dw);
+    var di = el("input"); di.id = "jdKe"; di.type = "date"; dw.appendChild(di); dw.appendChild(el("small", "sub", "tenggat tugas ikut pindah ke tanggal ini, pukul 16.00")); f.appendChild(dw);
     var al = el("label", "nd-l", "Alasan"); al.htmlFor = "jdAlasan"; f.appendChild(al);
     var chips = el("div", "jd-chips"); ALASAN.forEach(function (a) { var c = el("button", "jd-chip", a); c.type = "button"; c.addEventListener("click", function () { $("#jdAlasan").value = a; $("#jdAlasan").focus(); }); chips.appendChild(c); }); f.appendChild(chips);
     var ai = el("input"); ai.id = "jdAlasan"; ai.type = "text"; ai.maxLength = 200; ai.placeholder = "mis. pimpinan rapat direksi, digeser ke Kamis"; f.appendChild(ai);
@@ -1683,7 +1696,7 @@
   // jenis bawaan Jumat = MoM Weekly CR Aplikasi Layanan GA (Sen–Kam tetap MoM CoC; MoM Weekly CR ESPPD Kamis dipilih dari daftar)
   function upDefaultJenis() { var wd = (P(TODAY).getUTCDay() + 6) % 7; if (wd === 4) $("#upJenis").value = "crlayanan"; }
   $("#upTanggal").value = TODAY;
-  (function () { var s = $("#upJenis"); JENIS.forEach(function (j) { var o = el("option", null, j.label); o.value = j.k; s.appendChild(o); }); })();
+  (function () { var s = $("#upJenis"); JENIS.forEach(function (j) { if (j.arsip) return; var o = el("option", null, j.label); o.value = j.k; s.appendChild(o); }); })();
   upDefaultJenis();
   $("#upFile").addEventListener("change", function () { var f = $("#upFile").files[0]; if (f && f.size > MAX_MB * 1048576) setUpMsg("bad", "File " + kbStr(f.size) + " melebihi batas " + MAX_MB + " MB."); else setUpMsg("", ""); });
   $("#ghForm").addEventListener("submit", function (ev) {
