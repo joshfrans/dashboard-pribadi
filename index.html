@@ -7,8 +7,8 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Dashboard Pribadi · Strategi &amp; Evaluasi</title>
-<link rel="stylesheet" href="assets/dashboard.css?v=20261119-1">
-<script src="assets/dashboard.js?v=20261119-1" defer></script>
+<link rel="stylesheet" href="assets/dashboard.css?v=20261128-1">
+<script src="assets/dashboard.js?v=20261128-1" defer></script>
 </head>
 <body>
 <a class="skip" href="#konten">Langsung ke isi</a>
@@ -19,7 +19,7 @@
       <a href="#ringkasan" data-nav="ringkasan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Ringkasan</a>
       <a href="#kinerja" data-nav="kinerja"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Kinerja</a>
       <a href="#kalender" data-nav="kalender"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>Kalender</a>
-      <a href="#eviden" data-nav="eviden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>Unggah eviden</a>
+      <a href="#eviden" data-nav="eviden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>Arsip &amp; koneksi</a>
       <a href="#rutin" data-nav="rutin"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Rutin mingguan</a>
       <a href="#cr" data-nav="cr"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Monitoring CR<span class="cnt" id="navCr" hidden></span></a>
       <a href="#coc" data-nav="coc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Eviden CoC</a>
@@ -29,7 +29,7 @@
     </nav>
     <div class="side-foot">
       <span id="sideData">Memuat data…</span>
-      <span>Unggah eviden, tandai tugas ✓ Selesai, dan tulis catatan progres langsung di dashboard. Semua disalin ke tracker otomatis.</span>
+      <span>Tandai tugas ✓ Selesai dan tulis catatan progres langsung di dashboard. Pengingat jadwal CoC &amp; Weekly CR dikirim tiap pagi.</span>
       <button class="btn" type="button" id="btnLock">Kunci dashboard</button>
     </div>
   </aside>
@@ -108,7 +108,7 @@
         <div class="card">
           <div class="card-h"><h2>Hari ini</h2><a href="#ringkasan">Fokus hari ini →</a></div>
           <div class="kstats" id="kinToday"></div>
-          <p class="table-note">Target harian: semua tugas bertenggat hari ini selesai sebelum jamnya, dan eviden diunggah di hari yang sama.</p>
+          <p class="table-note">Target harian: semua tugas bertenggat hari ini selesai sebelum jamnya.</p>
         </div>
         <div class="card">
           <div class="card-h"><h2>Beban kerja 10 hari kerja</h2><span class="sub">tugas terbuka per tanggal tenggat</span></div>
@@ -131,7 +131,7 @@
         <div class="tgl" id="crPlan" role="list"></div>
         <p class="table-note" id="crPlanNote"></p>
       </div>
-      <p class="table-note kin-how">Cara menilai: tugas dinilai setelah selesai atau setelah tenggatnya lewat. “Tepat waktu” berarti waktu selesai (atau waktu unggah eviden) tidak melewati tanggal dan jam tenggat (WIB). Target: rutin CoC dan MoM weekly CR 100%, semua tugas ≥ 90%, prioritas tinggi selesai sebelum Jumat 16.00, tugas lewat tenggat 0, KPI 4b paling lambat hari kerja ke-3.</p>
+      <p class="table-note kin-how">Cara menilai: tugas dinilai setelah selesai atau setelah tenggatnya lewat. “Tepat waktu” berarti waktu selesai tidak melewati tanggal dan jam tenggat (WIB). Target: rutin CoC dan MoM weekly CR 100%, semua tugas ≥ 90%, prioritas tinggi selesai sebelum Jumat 16.00, tugas lewat tenggat 0, KPI 4b paling lambat hari kerja ke-3.</p>
     </section>
 
     <!-- KALENDER -->
@@ -162,7 +162,7 @@
 
     <!-- EVIDEN -->
     <section class="view" id="v-eviden" hidden>
-      <div class="card">
+      <div class="card" id="upCard" hidden>
         <div class="card-h"><h2>Unggah eviden</h2><span class="sub">PDF, Word, PowerPoint, Excel atau gambar · maks. 20 MB · dienkripsi di browser sebelum dikirim</span></div>
         <p class="up-msg warn" id="upLocked">Hubungkan GitHub dulu di bagian <b>Koneksi GitHub</b> di bawah (sekali per perangkat).</p>
         <form class="up-form" id="upForm" autocomplete="off">
@@ -243,7 +243,7 @@
           <div class="weeknav"><button class="btn" type="button" id="prevW2" aria-label="Minggu sebelumnya">‹</button><span class="lbl" id="evWeek"></span><button class="btn" type="button" id="nextW2" aria-label="Minggu berikutnya">›</button></div>
         </div>
         <div class="ev-grid" id="evGrid"></div>
-        <p class="table-note">⤓ unduh file yang diunggah lewat dashboard · ↗ buka file di tracker (eviden lama dan hasil evaluasi). Eviden yang diunggah lewat dashboard disalin ke tracker oleh sinkron otomatis, lalu dievaluasi pukul 17.55.</p>
+        <p class="table-note">⤓ unduh eviden lama yang pernah diunggah lewat dashboard · ↗ buka file di tracker. Unggah eviden dan evaluasi otomatis dinonaktifkan sejak 28 Nov 2026.</p>
       </div>
       <div class="detail" id="evDetail" hidden></div>
     </section>
