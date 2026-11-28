@@ -4,6 +4,7 @@
    v12: galat render tidak lagi menggagalkan unggah/simpan (sebelumnya tampil "Koneksi ke GitHub gagal") · cegah unggah ganda.
    v13: arsip eviden: penanda duplikat, tombol Hapus (2 langkah) dan "Rapikan duplikat" · arsip berbentuk kartu di HP · data dashboard terkompres (gzip) sebelum dienkripsi.
    v14: tugas rutin "Evaluasi rekapitulasi CoC" dihentikan sejak 18 Nov 2026 (tidak dibuat, tidak ditampilkan, tidak dihitung).
+   v15: unggah eviden & sinkron ke tracker dinonaktifkan (28 Nov 2026); arsip lama tetap bisa dibuka. Pengingat jadwal lewat ringkasan pagi.
    Sumber data: data/tracker.enc.json (ekspor tracker claude.ai → tools/ekspor_tracker.py → tools/enkripsi-data.mjs).
    Semua teks dari data ditulis dengan textContent; tidak ada innerHTML berisi data. */
 (function () {
@@ -11,6 +12,7 @@
 
   var DATA_URL = "data/tracker.enc.json";
   var POLL_MS = 60000;
+  var UPLOAD_OFF = true;   // v15: unggah eviden dinonaktifkan; arsip tetap bisa dibuka/diunduh
   var CAT = { mom: "MoM CoC", rekap: "Rekap CoC", cr: "Weekly CR", kpi: "KPI / RKM", dashboard: "Dashboard", lain: "Lainnya" };
   var ROUTINE = [
     { key: "mom", title: "Evaluasi MoM CoC tiap bidang", sub: "Sen–Kam · skill MoM PLN", days: [0, 1, 2, 3] },
@@ -102,7 +104,7 @@
     else if (t.status === "doing") side.appendChild(el("span", "chip s-risk", "Proses " + prog(t) + "%"));
     else if (grp === "today") side.appendChild(el("span", "chip s-due", "Belum"));
     var jk = jenisForTask(t.id);
-    if (jk && !done && grp === "today") { var b = el("button", "btn sm", "Unggah eviden"); b.type = "button"; b.addEventListener("click", function () { openUpload(jk, t.due); }); side.appendChild(b); }
+    if (!UPLOAD_OFF && jk && !done && grp === "today") { var b = el("button", "btn sm", "Unggah eviden"); b.type = "button"; b.addEventListener("click", function () { openUpload(jk, t.due); }); side.appendChild(b); }
     actBtns(t, side, true);
     r.appendChild(side);
     return r;
@@ -366,7 +368,7 @@
   }
 
   // ---- navigasi view ----
-  var VIEWS = { ringkasan: "Ringkasan", kinerja: "Kinerja pribadi", kalender: "Kalender", eviden: "Unggah & arsip eviden", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
+  var VIEWS = { ringkasan: "Ringkasan", kinerja: "Kinerja pribadi", kalender: "Kalender", eviden: "Arsip eviden & koneksi", rutin: "Rutin mingguan", cr: "Monitoring CR aplikasi", coc: "Eviden CoC per bidang", kpi: "Eviden KPI 4b DIV GA", tugas: "Daftar tugas" };
   function route() {
     var v = (location.hash || "#ringkasan").slice(1);
     if (!VIEWS[v]) v = "ringkasan";
@@ -584,7 +586,7 @@
   }
   function upCard(card, ups) {
     card.appendChild(el("h3", null, ups[0].ket || "CoC"));
-    card.appendChild(el("p", "muted", "Eviden masuk dari dashboard. Disalin ke tracker oleh sinkron otomatis, lalu dievaluasi pukul 17.55."));
+    card.appendChild(el("p", "muted", "Eviden lama yang pernah diunggah lewat dashboard."));
     fileRow(card, null, ups);
     card.appendChild(el("div", "ev-wait", "Menunggu evaluasi otomatis"));
   }
@@ -743,7 +745,7 @@
     if (jam <= 26) { setFresh("ok", "✓ Segar · data per " + label); banner.hidden = true; }
     else if (jam <= 96) { setFresh("warn", "▲ Tertunda · data per " + label); banner.hidden = false; banner.className = "banner"; banner.textContent = "Data belum diperbarui lebih dari sehari. Minta Claude memperbarui data/tracker.enc.json."; }
     else { setFresh("bad", "! Usang " + Math.floor(jam / 24) + " hari · data per " + label); banner.hidden = false; banner.className = "banner bad"; banner.textContent = "Data sudah lebih dari 4 hari. Angka di dashboard ini mungkin tidak lagi sesuai tracker."; }
-    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Eviden dan tombol ✓ Selesai disimpan terenkripsi di repo, lalu disalin ke tracker privat oleh sinkron otomatis (06.30, 12.30, 17.30 WIB).";
+    $("#footSrc").textContent = "Sumber data: " + (D.meta.sumber || "data/tracker.enc.json") + " · profil " + (D.meta.profil || "–") + " · diekspor " + label + ". Tombol ✓ Selesai dan catatan disimpan terenkripsi di repo. Unggah eviden dan sinkron ke tracker dinonaktifkan sejak 28 Nov 2026.";
   }
   function valid(x) { return x && typeof x === "object" && x.meta && x.tasks && x.cr && x.coc && x.kpi; }
   // setiap panel dirender terpisah: galat di satu panel dicatat di konsol, panel lain dan proses simpan tetap jalan
@@ -992,6 +994,7 @@
   function setUpMsg(cls, txt) { var m = $("#upMsg"); m.hidden = !txt; m.className = "up-msg " + (cls || ""); m.textContent = txt || ""; }
   function doUpload(ev) {
     ev.preventDefault();
+    if (UPLOAD_OFF) { setUpMsg("bad", "Unggah eviden sudah dinonaktifkan."); return; }
     if (uploading) return;
     if (!TOKEN) { setUpMsg("bad", "Hubungkan GitHub dulu (bagian Koneksi GitHub di bawah)."); return; }
     var f = $("#upFile").files[0], jenis = $("#upJenis").value, tanggal = $("#upTanggal").value, ket = $("#upKet").value.trim();
@@ -1093,7 +1096,7 @@
   }
   function shortT(s) { s = s || ""; return s.length > 48 ? s.slice(0, 46) + "…" : s; }
   function setTaskState(t, status) {
-    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Eviden → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
+    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Arsip & koneksi → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
     var id = t.id; if (saving[id]) return;
     var prev = ACT.status[id], at = nowIso();
     var val = status ? { status: status, at: at, doneAt: status === "done" ? at : null, progress: status === "done" ? 100 : 50 } : null;
@@ -1103,7 +1106,7 @@
     toast("Menyimpan status…", "");
     saveStatus(function (o) { if (val) o.status[id] = val; else delete o.status[id]; return o; }, 0).then(function () {
       var undo = { label: "Batalkan", fn: function () { setTaskState(t, null); } };
-      if (status === "done") toast("✓ “" + shortT(t.title) + "” selesai" + (jenisForTask(id) && !t.viaEviden ? ". Unggah eviden bila ada." : "."), "ok", undo);
+      if (status === "done") toast("✓ “" + shortT(t.title) + "” selesai" + (!UPLOAD_OFF && jenisForTask(id) && !t.viaEviden ? ". Unggah eviden bila ada." : "."), "ok", undo);
       else if (status === "doing") toast("“" + shortT(t.title) + "” sedang dikerjakan.", "ok", undo);
       else toast("Status “" + shortT(t.title) + "” dikembalikan.", "");
     }).catch(function (e) {
@@ -1133,7 +1136,7 @@
     noteBtn(kTask(t.id), box, mini);
   }
   function setMsState(c, m, done) {
-    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Eviden → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
+    if (!TOKEN) { toast("Hubungkan GitHub dulu (menu Arsip & koneksi → Koneksi GitHub) agar status bisa disimpan.", "bad", { label: "Buka", fn: function () { location.hash = "eviden"; } }); return; }
     var k = c.id + "::" + m.nama; if (saving[k]) return;
     ACT.ms = ACT.ms || {};
     var prev = ACT.ms[k], val = done ? { status: "Selesai", at: nowIso(), cr: c.id, nama: m.nama } : null;
@@ -1288,7 +1291,7 @@
     if (!nCtx) return;
     var teks = $("#ndText").value.trim(), jn = (nDlg.querySelector('input[name="ndJenis"]:checked') || {}).value || "progres";
     if (teks.length < 3) { ndErr("Tulis isi catatan minimal 3 karakter."); $("#ndText").focus(); return; }
-    if (!TOKEN) { ndErr("Hubungkan GitHub dulu (menu Unggah eviden → Koneksi GitHub) agar catatan bisa disimpan."); return; }
+    if (!TOKEN) { ndErr("Hubungkan GitHub dulu (menu Arsip & koneksi → Koneksi GitHub) agar catatan bisa disimpan."); return; }
     var info = nCtx.info, t = info.task, pv = $("#ndProg").value, due = $("#ndDue").value, pg = null;
     if (t && t.status !== "done" && pv !== "") {
       pg = Math.round(+pv);
@@ -1454,7 +1457,7 @@
     saveJadwal({ aksi: a, ke: a === "tunda" ? ke : undefined, alasan: al });
   }
   function saveJadwal(val) {
-    if (!TOKEN) { jdErr("Hubungkan GitHub dulu (menu Unggah eviden → Koneksi GitHub) agar perubahan jadwal bisa disimpan."); return; }
+    if (!TOKEN) { jdErr("Hubungkan GitHub dulu (menu Arsip & koneksi → Koneksi GitHub) agar perubahan jadwal bisa disimpan."); return; }
     var ids = $("#jdPair").checked ? jCtx.ids : [jCtx.id], at = nowIso(), prev = {};
     ids = ids.filter(function (id) { return D.tasks[id] || (D.batal && D.batal[id]); });
     ACT.jadwal = ACT.jadwal || {};
